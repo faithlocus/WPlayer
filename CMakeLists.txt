@@ -7,7 +7,7 @@ link_directories(~/ffmpeg_build/lib)
 include_directories(~/ffmpeg_build/include)
 
 # c++17
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # gdb
@@ -15,8 +15,12 @@ set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g2 -ggdb")
 set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
+set(SRC_LIST main.cpp)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rd)
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/slog/ SRC_TRD)
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} ${SRC_LIST} ${SRC_TRD})
 
 target_link_libraries(${PROJECT_NAME} libSDL2.a)
 

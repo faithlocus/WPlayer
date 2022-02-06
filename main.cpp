@@ -1,14 +1,14 @@
-#include <iostream>
-extern "C"
-{
-#include "libavcodec/avcodec.h"
-}
+#include <stdio.h>
+#include "slog/slog.h"
+#include "my_struct.h"
 
-int main()
+int main(int argc, char const *argv[])
 {
-    std::cout << "Hello FFmpeg" << std::endl;
-    auto version = avcodec_version();
-    std::cout << "version is:" << version << std::endl;
-
+    init_logger("log", _slog_level::S_DEBUG);
+    for(int i = 0; i < 10; i++)
+    {
+        dLog("slog hello world");
+    }
+    
     return 0;
 }
