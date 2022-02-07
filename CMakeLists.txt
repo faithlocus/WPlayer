@@ -23,6 +23,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 ELSEIF(WIN32)
 include_directories(./ffmpeg-4.2.1-win32-dev/include/)
 link_directories(./ffmpeg-4.2.1-win32-dev/lib/)
+include_directories(./SDL2-2.0.20/include/)
+link_directories(./SDL2-2.0.20/lib/x86/)
 ENDIF()
 
 
@@ -53,7 +55,8 @@ foreach(mainfile IN LISTS SRC_LIST)
     target_link_libraries(${mainname} va va-drm va-x11 vdpau X11 Xv Xext)
 
     ELSEIF(WIN32)
-    target_link_libraries(${mainname} avformat.lib
+    target_link_libraries(${mainname} SDL2.lib
+        avformat.lib
         swresample.lib
         swscale.lib
         avcodec.lib
