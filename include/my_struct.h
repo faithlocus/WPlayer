@@ -7,9 +7,15 @@
 extern "C" {
 #endif 
 
+#ifdef __GNUC__
 #include "SDL2/SDL_mutex.h"
 #include "SDL2/SDL_thread.h"
 #include "SDL2/SDL_render.h"
+#elif _MSC_VER
+#include "SDL_mutex.h"
+#include "SDL_thread.h"
+#include "SDL_render.h"
+#endif
 
 #include "libavformat/avformat.h"
 #include "libavcodec/avcodec.h"
