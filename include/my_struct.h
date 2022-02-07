@@ -23,6 +23,8 @@ extern "C" {
 #include "libavutil/frame.h"
 #include "libavutil/rational.h"
 #include "libswresample/swresample.h"
+#include "libswscale/swscale.h"
+#include "libavfilter/avfilter.h"
 
 #ifdef __cplusplus
 }
@@ -187,6 +189,9 @@ struct MainState
     int          audio_volume;
     int          muted;
     AudioParams  audio_src;
+#if CONFIG_AVFILTER
+    AudioParams audio_filter_src;
+#endif
     AudioParams  audio_tgt;
     SwrContext*  swr_ctx;
     int          frame_drop_early;
@@ -210,6 +215,38 @@ struct MainState
     SDL_Texture* vis_texture;
     SDL_Texture* sub_texture;
     SDL_Texture* vid_texture;
+
+    int subtitle_stream;
+    AVStream *subtitle_st;
+    PacketQueue subtitleq;
+
+    double frame_timer;
+    double frame_last_returned_time;
+    double frame_last_fitler_delay;
+    int video_stream;
+    AVStream *video_st;
+    PacketQueue videoq;
+    double max_frame_duration;
+    SwsContext *img_convert_ctx;
+    SwsContext *sub_convert_ctx;
+    int eof;
+
+    char *filename;
+    int width, height, xleft, ytop;
+    int step;
+
+#if CONFIG_AVFILTER
+    int vfilter_idx;
+    AVFilterContext *in_video_filter;
+    AVFilterContext *out_video_filter;
+    AVFilterContext *in_audio_filter;
+    AVFilterContext *out_audio_filter;
+    AVFilterGraph *agraph;
+#endif
+
+    int last_video_stream, last_audio_stream, last_subtitle_stream;
+
+    SDL_cond *continue_read_thread;
 };
 
 #endif  // __MY_STRUCT_H__
