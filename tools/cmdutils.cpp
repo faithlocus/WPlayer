@@ -9,6 +9,8 @@ extern "C" {
 #include "libavutil/avassert.h"
 #include "libavutil/avstring.h"
 #include "libavutil/bprint.h"
+#include "libavutil/opt.h"
+#include "libavutil/avutil.h"
 
 #ifdef __cplusplus
 }
@@ -22,25 +24,130 @@ void init_dynload(){
 #endif
 }
 
+static void expand_filename_template(AVBPrint *bp, const char* temp, tm *tm){
+    int c;
+
+    while((c = *(temp++))){
+      if (c == '%'){
+        if (!(c = *(temp++)))
+            break;
+        switch(c){
+          case 'p':
+              av_bprintf(bp, "%s", program_name);
+              break;
+          case 't':
+              av_bprintf(bp,
+                          "%04d%02d%02d-%02d%02d%02d",
+                          tm->tm_year + 1990,
+                          tm->tm_mon + 1,
+                          tm->tm_mday,
+                          tm->tm_hour,
+                          tm->tm_min,
+                          tm->tm_sec);
+              break;
+          case '%':
+              av_bprint_chars(bp, c, 1);
+              break;
+        }
+      }else{
+          av_bprint_chars(bp, c, 1);
+      }
+    }
+}
+
+static void log_callback_report(void *ptr, int level, const char *fmt, va_list vl){
+    va_list vl2;
+    char    line[1024];
+    static int print_prefix = 1;
+
+    va_copy(vl2, vl);
+    av_log_default_callback(ptr, level, fmt, vl);
+    av_log_format_line(ptr, level, fmt, vl2, line, sizeof(line), &print_prefix);
+    va_end(vl2);
+    if(report_file_level >= level){
+        fputs(line, report_file);
+        fflush(report_file);
+    }
+}
+
 static FILE *report_file;
-static int init_report(const char *env) {
-  char *filename_template = NULL;
-  char *key, *val;
-  int ret, count = 0;
-  int prog_loglevel, envlevel = 0;
-  time_t now;
-  tm *tm;
-  AVBPrint filename;
+static int   report_file_level = AV_LOG_DEBUG;
+static int   init_report(const char* env) {
+    char*    filename_template = NULL;
+    char *   key, *val;
+    int      ret, count              = 0;
+    int      prog_loglevel, envlevel = 0;
+    time_t   now;
+    tm*      tm;
+    AVBPrint filename;
 
-  if (report_file) // already opend
+    if (report_file)  // already opend
+        return 0;
+
+    time(&now);
+    tm = localtime(&now);
+
+    while (env && *env) {
+        if ((ret = av_opt_get_key_value(&env, "=", ":", &key, &val)) < 0) {
+            if (count)
+                av_log(NULL,
+                       AV_LOG_ERROR,
+                       "Failed to parse FFREPORT environment variable:%s\n",
+                       av_err2str(ret));
+            break;
+        }
+        if (*env)
+            env++;
+        count++;
+        if (!strcmp(key, "file")) {
+            av_free(filename_template);
+            filename_template = val;
+            val               = NULL;
+        } else if (!strcmp(key, "level")) {
+            char* tail;
+            report_file_level = strtol(val, &tail, 10);
+            if (*tail){
+                av_log(NULL, AV_LOG_FATAL, "Invalid report file level\n");
+                exit_program(1);
+            }
+        }else{
+            av_log(NULL, AV_LOG_ERROR, "Unknown key '%s' in FFREPORT\n", key);
+        }
+        av_free(val);
+        av_free(key);
+    }
+
+    av_bprint_init(&filename, 0, AV_BPRINT_SIZE_AUTOMATIC);
+    // TODO(): <wangqing@gaugene.com>-<2022-02-07>
+    expand_filename_template(&filename, av_x_if_null(filename_template, "%p-%t.log"), tm);
+    av_free(filename_template);
+    if (!av_bprint_is_complete(&filename)){
+        av_log(NULL, AV_LOG_ERROR, "Out of memory building report file name\n");
+        return AVERROR(ENOMEM);
+    }
+
+    report_file = fopen(filename.str, "w");
+    if(!report_file){
+        int ret = AVERROR(errno);
+        av_log(
+            NULL, AV_LOG_ERROR, "Failed o open report \"%s\": %s\n", filename.str, strerror(errno));
+        return ret;
+    }
+
+    av_log_set_callback(log_callback_report);
+    av_log(NULL,
+           AV_LOG_INFO,
+           "%s started on %04d-/%02d-%02d at %02d:%02d:%02d\n Report written to \"%s\"\n",
+           program_name,
+           tm->tm_year + 1990,
+           tm->tm_mon + 1,
+           tm->tm_mday,
+           tm->tm_hour,
+           tm->tm_min,
+           tm->tm_sec,
+           filename.str);
+    av_bprint_finalize(&filename, NULL);
     return 0;
-
-  time(&now);
-  tm = localtime(&now);
-
-  while(env && *env){
-      
-  }
 }
 
 int opt_report(void *optctx, const char *opt, const char *arg){

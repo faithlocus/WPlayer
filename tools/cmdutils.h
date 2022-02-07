@@ -10,6 +10,8 @@ extern "C" {
 }
 #endif //__cplusplus
 
+extern const char program_name[];
+
 int hide_banner = 0;
 
 struct SpecifierOpt {

@@ -3,6 +3,8 @@
 #include "my_struct.h"
 #include "tools/cmdutils.h"
 
+const char             program_name[] = "WPlayer";
+
 extern const OptionDef options[];
 
 int main(int argc, char const *argv[])
