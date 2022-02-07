@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/3rd)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/slog/ SRC_TRD)
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/tools SRC_TOOLS)
 
 set(SRC_LIST main.cpp)
 
@@ -30,13 +31,12 @@ ENDIF()
 
 foreach(mainfile IN LISTS SRC_LIST)
     get_filename_component(mainname ${mainfile} NAME_WE)
-    add_executable(${mainname} ${mainfile} ${SRC_TRD})
-    message(STATUS "${mainname} ${mainfile} ${SRC_TRD}")
+    add_executable(${mainname} ${mainfile} ${SRC_TRD} ${SRC_TOOLS})
+    message(STATUS "${mainname} ${mainfile}")
     IF(UNIX)
     target_link_libraries(${mainname} libSDL2.a)
 
     target_link_libraries(${mainname} libavformat.a)
-
     target_link_libraries(${mainname} libavcodec.a)
 
     target_link_libraries(${mainname} libopus.a)
