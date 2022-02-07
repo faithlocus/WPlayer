@@ -3,6 +3,7 @@
 #include "my_struct.h"
 #include "tools/cmdutils.h"
 
+extern const OptionDef options[];
 
 int main(int argc, char const *argv[])
 {
@@ -11,6 +12,8 @@ int main(int argc, char const *argv[])
     init_dynload();
 
     av_log_set_flags(AV_LOG_SKIP_REPEATED);
+    parse_loglevel(argc, argv, options);
+
     int flags;
     MainState *is;
 

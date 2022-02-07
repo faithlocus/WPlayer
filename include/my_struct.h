@@ -249,4 +249,8 @@ struct MainState
     SDL_cond *continue_read_thread;
 };
 
+struct OptionDef
+{
+};
+
 #endif  // __MY_STRUCT_H__

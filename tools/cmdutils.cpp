@@ -7,3 +7,7 @@ void init_dynload(){
   SetDllDirectory("");
 #endif
 }
+
+void parse_loglevel(int argc, const char **argv, const OptionDef *options){
+
+}
