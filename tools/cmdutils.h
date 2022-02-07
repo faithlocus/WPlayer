@@ -128,5 +128,7 @@ int opt_cpuflags(void *optctx, const char *opt, const char *arg);
 
 void init_dynload();
 
+void register_exit(void (*cb)(int));
+void exit_program(int);
 void parse_loglevel(int argc, const char **argv, const OptionDef *options);
 #endif // __CMD_UTILS_H__
