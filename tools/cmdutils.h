@@ -10,10 +10,6 @@ extern "C" {
 }
 #endif //__cplusplus
 
-extern const char program_name[];
-
-int hide_banner = 0;
-
 struct SpecifierOpt {
   char *specifier;
   union {
@@ -98,6 +94,9 @@ struct OptionDef {
     { "hide_banner",    OPT_BOOL | OPT_EXPERT,  {&hide_banner},                 "do not show program banner", "hide_banner"},  \
     CMDUTILS_COMMON_OPTIONS_AVDEVICE
 
+void init_opts();
+
+void show_banner(int, const char**, const OptionDef*);
 
 #if CONFIG_AVDEVICE
 int show_sinks(void *optctx, const char* opt, const  char *arg);

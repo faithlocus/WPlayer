@@ -10,6 +10,7 @@ extern "C" {
 #include "libavutil/avstring.h"
 #include "libavutil/avutil.h"
 #include "libavutil/bprint.h"
+#include "libavutil/dict.h"
 #include "libavutil/error.h"
 #include "libavutil/opt.h"
 
@@ -17,8 +18,72 @@ extern "C" {
 }
 #endif  //__cplusplus
 
+#define FFMPEG_VERSION 1.0 
+#define CONFIG_THIS_YEAR 2021
+
+#define INDENT 1
+#define SHOW_VERSION 2
+#define SHOW_CONFIG 4
+#define SHOW_COPYRIGHT 8
+
+
+extern const char program_name[];
+extern const int  program_birth_year;
+extern const char cc_ident[];
+
+auto CC_INDENT = cc_ident;
+#define FFMPEG_CONFIGURATION ""
+
+#define PRINT_LIB_INFO(libname, LIBNAME, flags, level) 
+
+static void print_program_info(int flags, int level) {
+    const char* indent = flags & flags ? "  " : "";
+
+    av_log(NULL, level, "%s version ", FFMPEG_VERSION, program_name);
+    if (flags & SHOW_COPYRIGHT)
+        av_log(NULL,
+               level,
+               " Copyright (c) %d-%d the ffmpeg developers",
+               program_birth_year,
+               CONFIG_THIS_YEAR);
+
+    av_log(NULL, level, "\n");
+    av_log(NULL, level, "%sbuild with %s\n", indent, CC_INDENT);
+    av_log(NULL, level, "%sconfiguration: " FFMPEG_CONFIGURATION "\n", indent);
+}
+
+static void print_all_libs_info(int flags, int level) {
+    PRINT_LIB_INFO(avutil, AVUTIL, flags, level);
+    PRINT_LIB_INFO(avcodec, AVCODEC, flags, level);
+    PRINT_LIB_INFO(avformat, AVFORMAT, flags, level);
+    PRINT_LIB_INFO(avdevice, AVDEVICE, flags, level);
+    PRINT_LIB_INFO(avfilter, AVFILTER, flags, level);
+    PRINT_LIB_INFO(swscale, SWSCALE, flags, level);
+    PRINT_LIB_INFO(swresample, SWRESAMPLE, flags, level);
+    PRINT_LIB_INFO(postproc, POSTPROC, flags, level);
+}
+
+AVDictionary* sws_dict;
+AVDictionary* swr_opts;
+AVDictionary *format_options, *codec_opts, *resample_opts;
+
+void init_opts() {
+    av_dict_set(&sws_dict, "flags", "bicubic", 0);
+}
+
 static FILE* report_file;
 static int   report_file_level = AV_LOG_DEBUG;
+
+int  hide_banner = 0;
+void show_banner(int argc, const char** argv, const OptionDef* options) {
+    int idx = locate_option(argc, argv, options, "version");
+    if (hide_banner || idx)
+        return;
+
+    print_program_info(INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
+    print_all_libs_info(INDENT|SHOW_CONFIG, AV_LOG_INFO);
+    print_all_libs_info(INDENT|SHOW_CONFIG, AV_LOG_INFO);
+}
 
 // 动态加载动态库路径
 // TODO(有什么意义): <wangqing@gaugene.com>-<2022-02-07>
