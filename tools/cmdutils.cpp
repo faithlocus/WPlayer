@@ -421,3 +421,13 @@ void parse_loglevel(int argc, const char** argv, const OptionDef* options) {
     if (idx)
         hide_banner = 1;
 }
+
+void parse_options(void*            optctx,
+                   int              argc,
+                   const char**     argv,
+                   const OptionDef* options,
+                   void (*parse_arg_function)(void*, const char*)) {
+    // todo-start/////////////////////////////////////
+    // author: wangqing deadline: 2021/01/01
+    // todo-end//////////////////////////////////////////////
+}

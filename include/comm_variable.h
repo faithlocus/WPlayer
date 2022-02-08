@@ -19,5 +19,18 @@ extern "C" {
 
 #define FRAME_QUEUE_SIZE FFMAX(SAMPLE_QUEUE_SIZE, FFMAX(VIDEO_PICTURE_QUEUE_SIZE, SUBPICTURE_QUEUE_SIZE))
 
+const char* input_filename;
+int         display_disable;
+
+int video_disable;
+int audio_disable;
+int subtitle_disable;
+int alwaysontop;
+int borderless;
+
+int default_width = 640;
+int default_height = 480;
+const AVInputFormat* file_iformat;
+
 #endif // __COMM_VARIABLE_H__
 

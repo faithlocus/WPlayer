@@ -132,4 +132,10 @@ void init_dynload();
 void register_exit(void (*cb)(int));
 void exit_program(int);
 void parse_loglevel(int argc, const char **argv, const OptionDef *options);
+
+void parse_options(void*            optctx,
+                   int              argc,
+                   const char**     argv,
+                   const OptionDef* options,
+                   void (*parse_arg_function)(void*, const char*));
 #endif // __CMD_UTILS_H__
