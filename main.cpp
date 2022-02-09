@@ -23,6 +23,8 @@ const char cc_ident[]         = "gcc 9.1.1 (GCC) 20190807";
 
 extern const OptionDef options[];
 
+extern AVDictionary* sws_dict, * swr_opts, *format_opts, *codec_opts, *resample_opts;
+
 static void sigterm_handler(int sig) {
     // todo-start/////////////////////////////////////
     // author: wangqing deadline: 2021/01/01
@@ -165,7 +167,6 @@ static int decode_interrupt_cb(void* ctx) {
     return is->abort_request;
 }
 
-extern AVDictionary* format_opts;
 static int read_thread(void* arg) {
     // TODO(wangqing): 功能未实现
     MainState*       is = ( MainState* )arg;
@@ -228,7 +229,20 @@ static int read_thread(void* arg) {
      // TODO(wangqing): 代码有省略
 
     if (find_stream_info){
+        AVDictionary** opts = setup_find_stream_info_opts(ic, codec_opts);
+        int            orig_nb_streams = ic->nb_streams;
+        
+        err = avformat_find_stream_info(ic, opts);
+        
+        for (int i = 0; i < orig_nb_streams; ++i)
+            av_dict_free(&opts[i]);
+        av_freep(&opts);
 
+        if (err < 0){
+            wlog("%s: could not find codec parameters\n", is->filename);
+            ret = -1;
+            goto fail;
+        }
     }
 
 fail:
