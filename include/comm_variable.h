@@ -28,12 +28,13 @@ int video_disable;
 int audio_disable;
 int subtitle_disable;
 int alwaysontop;
+int startup_volume = 100;
+int show_status = -1;
 int borderless;
 
 int                  default_width  = 640;
 int                  default_height = 480;
 const AVInputFormat* file_iformat;
 
-int show_status = -1;
 
 #endif  // __COMM_VARIABLE_H__

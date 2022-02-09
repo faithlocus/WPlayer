@@ -166,7 +166,7 @@ struct MainState {
     int av_sync_type;
 
     double       audio_clock;
-    int          auio_clock_serial;
+    int          audio_clock_serial;
     double       audio_diff_cum;
     double       audio_diff_threshold;
     int          audio_diff_avg_count;

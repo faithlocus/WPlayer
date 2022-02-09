@@ -97,6 +97,10 @@ static int frame_queue_init(FrameQueue*  f,
     return 0;
 }
 
+static void frame_queue_destory(FrameQueue* f) {
+    // TODO(wangqing): issue
+}
+
 static int packet_queue_init(PacketQueue* q) {
     memset(q, 0, sizeof(PacketQueue));
     q->pkt_list = av_fifo_alloc(sizeof(MyAVPacket));
@@ -114,6 +118,10 @@ static int packet_queue_init(PacketQueue* q) {
     }
     q->abort_request = 1;
     return 0;
+}
+
+static void packet_queue_destory(PacketQueue* q) {
+    // TODO(wangqing): issue
 }
 
 static double get_clock(Clock* c) {
@@ -153,17 +161,53 @@ static void init_clock(Clock* c, int* queue_serial) {
     set_clock(c, NAN, -1);
 }
 
+static int read_thread(void* arg) 
+{
+    // TODO(wangqing): 功能未实现
+}
+
+static void stream_component_close(MainState* is, int stream_index) {
+    // TODO(wangqing): issue
+}
+
 static void stream_close(MainState* is) {
-    // todo-start/////////////////////////////////////
-    // author: wangqing deadline: 2021/01/01
-    // todo-end//////////////////////////////////////////////
+    is->abort_request = 1;
+    SDL_WaitThread(is->read_tid, NULL);
+
+    // close each stream
+    if (is->audio_stream >= 0)
+        stream_component_close(is, is->audio_stream);
+    if (is->video_stream >= 0)
+        stream_component_close(is, is->video_stream);
+    if (is->subtitle_stream >= 0)
+        stream_component_close(is, is->subtitle_stream);
+
+    avformat_close_input(&is->ic);
+
+    packet_queue_destory(&is->videoq);
+    packet_queue_destory(&is->audioq);
+    packet_queue_destory(&is->subtitleq);
+
+    frame_queue_destory(&is->pictq);
+    frame_queue_destory(&is->sampq);
+    frame_queue_destory(&is->subpq);
+
+    SDL_DestroyCond(is->continue_read_thread);
+    sws_freeContext(is->img_convert_ctx);
+    sws_freeContext(is->sub_convert_ctx);
+    av_free(is->filename);
+    
+    if (is->vis_texture)
+        SDL_DestroyTexture(is->vis_texture);
+    if (is->vid_texture)
+        SDL_DestroyTexture(is->vid_texture);
+    if (is->sub_texture)
+        SDL_DestroyTexture(is->sub_texture);
+    av_free(is);
 }
 
 static MainState* stream_open(const char*          filename,
                               const AVInputFormat* iformat) {
-    // todo-start/////////////////////////////////////
-    // author: wangqing deadline: 2021/01/01
-    // todo-end//////////////////////////////////////////////
     MainState* is;
     is = ( MainState* )av_mallocz(sizeof(MainState));
     if (!is)
@@ -199,14 +243,34 @@ static MainState* stream_open(const char*          filename,
         goto fail;
     }
 
+    // 初始化各个Stream的时钟
     init_clock(&is->vidclk, &is->videoq.serial);
     init_clock(&is->audclk, &is->audioq.serial);
     init_clock(&is->extclk, &is->extclk.serial);
 
+     // TODO(wangqing): 有什么用途
+    is->audio_clock_serial = -1;
 
+    // 设置初始音量
+    if (startup_volume < 0)
+        av_log(NULL,  AV_LOG_WARNING, "-volume=%s < 0, setting to 0\n", startup_volume);
+    if (startup_volume > 100)
+        av_log(NULL,  AV_LOG_WARNING, "-volume=%s > 100, setting to 100\n", startup_volume);
+    startup_volume = av_clip(startup_volume, 0, 100);
+    startup_volume = av_clip(SDL_MIX_MAXVOLUME * startup_volume / 100, 0, SDL_MIX_MAXVOLUME);
+    is->audio_volume = startup_volume;
+
+    is->muted = 0;
+    is->av_sync_type = av_sync_type;
+
+    is->read_tid = SDL_CreateThread(read_thread, "read_thread", is);
+    if (!is->read_tid) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread():%s\n", SDL_GetError());
 fail:
-    stream_close(is);
-    return NULL;
+        stream_close(is);
+        return NULL;
+    }
+    return is;
 }
 
 static void event_loop(MainState* cur_stream) {
