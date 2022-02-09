@@ -95,6 +95,7 @@ struct OptionDef {
     CMDUTILS_COMMON_OPTIONS_AVDEVICE
 
 void init_opts();
+void uninit_opts();
 
 void show_banner(int, const char**, const OptionDef*);
 

@@ -10,6 +10,7 @@ extern "C" {
 #endif
 
 #include "SDL.h"
+#include "libavutil/time.h"
 
 #ifdef __cplusplus
 }
@@ -71,6 +72,87 @@ static void do_exit(MainState* is) {
     exit(0);
 }
 
+static int frame_queue_init(FrameQueue*  f,
+                            PacketQueue* pktq,
+                            int          max_size,
+                            int          keep_last) {
+    memset(f, 0, sizeof(FrameQueue));
+    if (!(f->mutex = SDL_CreateMutex())) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
+        return AVERROR(ENOMEM);
+    }
+    if (!(f->cond = SDL_CreateCond())) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond():%s\n", SDL_GetError());
+        return AVERROR(ENOMEM);
+    }
+
+    f->pktq     = pktq;
+    f->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
+    // TODO(wangqing): 为什么使用两次取反
+    f->keep_last = !!keep_last;
+    for (int i = 0; i < f->max_size; ++i) {
+        if (!(f->queue[i].frame = av_frame_alloc()))
+            return AVERROR(ENOMEM);
+    }
+    return 0;
+}
+
+static int packet_queue_init(PacketQueue* q) {
+    memset(q, 0, sizeof(PacketQueue));
+    q->pkt_list = av_fifo_alloc(sizeof(MyAVPacket));
+    if (!q->pkt_list)
+        return AVERROR(ENOMEM);
+    q->mutex = SDL_CreateMutex();
+    if (!q->mutex) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
+        return AVERROR(ENOMEM);
+    }
+    q->cond = SDL_CreateCond();
+    if (!q->cond) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond():%s\n", SDL_GetError());
+        return AVERROR(ENOMEM);
+    }
+    q->abort_request = 1;
+    return 0;
+}
+
+static double get_clock(Clock* c) {
+    if (*c->queue_serial != c->serial)
+        return NAN;
+    if (c->paused) {
+        return c->pts;
+    } else {
+        double time = av_gettime_relative() / 1000000.0;
+        return c->pts_drift + time
+               - (time - c->last_updates) * (1.0 - c->speed);
+    }
+}
+
+static void set_clock_at(Clock* c, double pts, int serial, double time) {
+    c->pts          = pts;
+    c->last_updates = time;
+    c->pts_drift    = c->pts - time;
+    c->serial       = serial;
+}
+
+static void set_clock(Clock* c, double pts, int serial) {
+    double time = av_gettime_relative() / 1000000.0;
+    set_clock_at(c, pts, serial, time);
+}
+
+static void set_clock_speed(Clock* c, double speed)
+{
+    set_clock(c, get_clock(c), c->serial);
+    c->speed = speed;
+}
+
+static void init_clock(Clock* c, int* queue_serial) {
+    c->speed = 1.0;
+    c->paused = 0;
+    c->queue_serial = queue_serial;
+    set_clock(c, NAN, -1);
+}
+
 static void stream_close(MainState* is) {
     // todo-start/////////////////////////////////////
     // author: wangqing deadline: 2021/01/01
@@ -82,6 +164,49 @@ static MainState* stream_open(const char*          filename,
     // todo-start/////////////////////////////////////
     // author: wangqing deadline: 2021/01/01
     // todo-end//////////////////////////////////////////////
+    MainState* is;
+    is = ( MainState* )av_mallocz(sizeof(MainState));
+    if (!is)
+        return NULL;
+
+    is->last_video_stream = is->video_stream = -1;
+    is->last_audio_stream = is->audio_stream = -1;
+    is->last_subtitle_stream = is->subtitle_stream = -1;
+    is->filename                                   = av_strdup(filename);
+    if (!is->filename)
+        goto fail;
+    is->iformat = iformat;
+    is->ytop    = 0;
+    is->xleft   = 0;
+
+    // start video display
+    if (frame_queue_init(&is->pictq, &is->videoq, VIDEO_PICTURE_QUEUE_SIZE, 1)
+        < 0)
+        goto fail;
+    if (frame_queue_init(&is->subpq, &is->subtitleq, SUBPICTURE_QUEUE_SIZE, 0)
+        < 0)
+        goto fail;
+    if (frame_queue_init(&is->sampq, &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
+        goto fail;
+
+    if (packet_queue_init(&is->videoq) < 0 || 
+        packet_queue_init(&is->audioq) < 0 || 
+        packet_queue_init(&is->subtitleq) < 0)
+        goto fail;
+
+    if (!(is->continue_read_thread = SDL_CreateCond())) {
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond():%s\n", SDL_GetError());
+        goto fail;
+    }
+
+    init_clock(&is->vidclk, &is->videoq.serial);
+    init_clock(&is->audclk, &is->audioq.serial);
+    init_clock(&is->extclk, &is->extclk.serial);
+
+
+fail:
+    stream_close(is);
+    return NULL;
 }
 
 static void event_loop(MainState* cur_stream) {
