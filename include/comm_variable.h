@@ -32,5 +32,7 @@ int default_width = 640;
 int default_height = 480;
 const AVInputFormat* file_iformat;
 
+int show_status = -1;
+
 #endif // __COMM_VARIABLE_H__
 

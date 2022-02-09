@@ -65,10 +65,18 @@ static void print_all_libs_info(int flags, int level) {
 
 AVDictionary* sws_dict;
 AVDictionary* swr_opts;
-AVDictionary *format_options, *codec_opts, *resample_opts;
+AVDictionary *format_opts, *codec_opts, *resample_opts;
 
 void init_opts() {
     av_dict_set(&sws_dict, "flags", "bicubic", 0);
+}
+
+void uninit_opts(){
+    av_dict_free(&swr_opts);
+    av_dict_free(&sws_dict);
+    av_dict_free(&format_opts);
+    av_dict_free(&codec_opts);
+    av_dict_free(&resample_opts);
 }
 
 static FILE* report_file;

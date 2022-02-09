@@ -51,8 +51,29 @@ static void show_usage() {
 }
 
 static void do_exit(MainState* is) {
+    if (is)
+        stream_close(is);
+
+    if (renderer)
+        SDL_DestroyRenderer(renderer);
+    if (window)
+        SDL_DestroyWindow(window);
+    uninit_opts();
+#if CONFIG_AVFILTER
+    av_freep(&vfilters_list);
+#endif
+    avformat_network_deinit();
+
+    if (show_status)
+        printf("\n");
+    SDL_Quit();
+    av_log(NULL, AV_LOG_QUIET, "%s", "");
+    exit(0);
+}
+
+static void stream_close(MainState* is) {
     // todo-start/////////////////////////////////////
-    // author: :wwangqing deadline: 2021/01/01
+    // author: wangqing deadline: 2021/01/01
     // todo-end//////////////////////////////////////////////
 }
 
@@ -69,13 +90,12 @@ static void event_loop(MainState* cur_stream) {
     // todo-end//////////////////////////////////////////////
 }
 
-static SDL_Window*   window;
-static SDL_Renderer* renderer;
-static SDL_RendererInfo renderer_info = {0};
+static SDL_Window*       window;
+static SDL_Renderer*     renderer;
+static SDL_RendererInfo  renderer_info = { 0 };
 static SDL_AudioDeviceID audio_dev;
 
-int main(int argc, char const *argv[])
-{
+int main(int argc, char const* argv[]) {
     init_logger("log", _slog_level::S_DEBUG);
 
     init_dynload();
@@ -157,7 +177,7 @@ int main(int argc, char const *argv[])
                                   SDL_WINDOWPOS_UNDEFINED,
                                   default_width,
                                   default_height,
-                                  flags); 
+                                  flags);
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
         if (window) {
             renderer = SDL_CreateRenderer(window,
@@ -165,17 +185,27 @@ int main(int argc, char const *argv[])
                                           SDL_RENDERER_ACCELERATED
                                               | SDL_RENDERER_PRESENTVSYNC);
             if (!renderer) {
-                av_log(NULL, AV_LOG_WARNING, "Failed to initilize a hardware accelerated renderer:%s\n", SDL_GetError());
+                av_log(
+                    NULL,
+                    AV_LOG_WARNING,
+                    "Failed to initilize a hardware accelerated renderer:%s\n",
+                    SDL_GetError());
                 renderer = SDL_CreateRenderer(window, -1, 0);
             }
             if (renderer) {
                 if (!SDL_GetRendererInfo(renderer, &renderer_info))
-                    av_log(NULL, AV_LOG_VERBOSE, "Initialized %s renderer.", renderer_info.name);
+                    av_log(NULL,
+                           AV_LOG_VERBOSE,
+                           "Initialized %s renderer.",
+                           renderer_info.name);
             }
         }
 
         if (!window || !renderer || !renderer_info.num_texture_formats) {
-            av_log(NULL, AV_LOG_FATAL, "Failed to create window or renderer:%s", SDL_GetError());
+            av_log(NULL,
+                   AV_LOG_FATAL,
+                   "Failed to create window or renderer:%s",
+                   SDL_GetError());
             do_exit(NULL);
         }
     }
@@ -189,5 +219,3 @@ int main(int argc, char const *argv[])
 
     return 0;
 }
-
-
