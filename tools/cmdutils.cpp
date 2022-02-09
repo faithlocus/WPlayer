@@ -18,14 +18,13 @@ extern "C" {
 }
 #endif  //__cplusplus
 
-#define FFMPEG_VERSION 1.0 
+#define FFMPEG_VERSION 1.0
 #define CONFIG_THIS_YEAR 2021
 
 #define INDENT 1
 #define SHOW_VERSION 2
 #define SHOW_CONFIG 4
 #define SHOW_COPYRIGHT 8
-
 
 extern const char program_name[];
 extern const int  program_birth_year;
@@ -34,7 +33,7 @@ extern const char cc_ident[];
 auto CC_INDENT = cc_ident;
 #define FFMPEG_CONFIGURATION ""
 
-#define PRINT_LIB_INFO(libname, LIBNAME, flags, level) 
+#define PRINT_LIB_INFO(libname, LIBNAME, flags, level)
 
 static void print_program_info(int flags, int level) {
     const char* indent = flags & flags ? "  " : "";
@@ -71,7 +70,7 @@ void init_opts() {
     av_dict_set(&sws_dict, "flags", "bicubic", 0);
 }
 
-void uninit_opts(){
+void uninit_opts() {
     av_dict_free(&swr_opts);
     av_dict_free(&sws_dict);
     av_dict_free(&format_opts);
@@ -88,9 +87,9 @@ void show_banner(int argc, const char** argv, const OptionDef* options) {
     if (hide_banner || idx)
         return;
 
-    print_program_info(INDENT|SHOW_COPYRIGHT, AV_LOG_INFO);
-    print_all_libs_info(INDENT|SHOW_CONFIG, AV_LOG_INFO);
-    print_all_libs_info(INDENT|SHOW_CONFIG, AV_LOG_INFO);
+    print_program_info(INDENT | SHOW_COPYRIGHT, AV_LOG_INFO);
+    print_all_libs_info(INDENT | SHOW_CONFIG, AV_LOG_INFO);
+    print_all_libs_info(INDENT | SHOW_CONFIG, AV_LOG_INFO);
 }
 
 // 动态加载动态库路径
@@ -438,4 +437,12 @@ void parse_options(void*            optctx,
     // todo-start/////////////////////////////////////
     // author: wangqing deadline: 2021/01/01
     // todo-end//////////////////////////////////////////////
+}
+
+void print_error(const char* filename, int err) {
+    char errbuf[128];
+    const char* errbuf_ptr = errbuf;
+    if (av_strerror(err, errbuf, sizeof(errbuf)) < 0)
+        errbuf_ptr = strerror(AVUNERROR(err));
+    av_log(NULL, AV_LOG_ERROR, "%s:%s\n", filename, errbuf_ptr);
 }

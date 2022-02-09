@@ -3,6 +3,7 @@
 
 #include "my_struct.h"
 #include "slog/slog.h"
+#include "tools/log.h"
 #include "tools/cmdutils.h"
 
 #ifdef __cplusplus
@@ -88,7 +89,6 @@ static int frame_queue_init(FrameQueue*  f,
 
     f->pktq     = pktq;
     f->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
-    // TODO(wangqing): 为什么使用两次取反
     f->keep_last = !!keep_last;
     for (int i = 0; i < f->max_size; ++i) {
         if (!(f->queue[i].frame = av_frame_alloc()))
@@ -148,22 +148,102 @@ static void set_clock(Clock* c, double pts, int serial) {
     set_clock_at(c, pts, serial, time);
 }
 
-static void set_clock_speed(Clock* c, double speed)
-{
+static void set_clock_speed(Clock* c, double speed) {
     set_clock(c, get_clock(c), c->serial);
     c->speed = speed;
 }
 
 static void init_clock(Clock* c, int* queue_serial) {
-    c->speed = 1.0;
-    c->paused = 0;
+    c->speed        = 1.0;
+    c->paused       = 0;
     c->queue_serial = queue_serial;
     set_clock(c, NAN, -1);
 }
 
-static int read_thread(void* arg) 
-{
+static int decode_interrupt_cb(void* ctx) {
+    MainState* is = (MainState*)ctx;
+    return is->abort_request;
+}
+
+extern AVDictionary* format_opts;
+static int read_thread(void* arg) {
     // TODO(wangqing): 功能未实现
+    MainState*       is = ( MainState* )arg;
+    int              ret, err, i;
+    int              st_index[AVMEDIA_TYPE_NB];
+
+    int64_t    stream_start_time;  // TODO(wangqing): issue
+    int        pkt_in_play_range = 0;  // TODO(wangqing): :wissue
+
+    SDL_mutex* wait_mutex = SDL_CreateMutex();
+    if (!wait_mutex){
+        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+
+    memset(st_index, -1, sizeof(st_index));
+    is->eof = 0;
+
+    AVPacket* pkt = av_packet_alloc();
+    if (!pkt){
+        flog("Could not allocate packet\n");
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+
+    AVFormatContext* ic = avformat_alloc_context();
+    if (!ic){
+        flog("Could not allocate context.\n");
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+    ic->interrupt_callback.callback = decode_interrupt_cb;
+    ic->interrupt_callback.opaque   = is;
+    if (!av_dict_get(format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE)) {
+        av_dict_set(&format_opts, "scan_all_pmts", "1", AV_DICT_DONT_OVERWRITE);
+        scan_all_pmts_set = 1;
+    }
+
+    err = avformat_open_input(&ic, is->filename, is->iformat, &format_opts);
+    if (err < 0){
+        print_error(is->filename, err);
+        ret = -1;
+        goto fail;
+    }
+    if (scan_all_pmts_set)
+        av_dict_set(&format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
+
+    AVDictionaryEntry* t;
+    if ((t = av_dict_get(format_opts, "", NULL, AV_DICT_IGNORE_SUFFIX))){
+        elog("Option %s not found.\n", t->key);
+        ret = AVERROR_OPTION_NOT_FOUND;
+        goto fail;
+    }
+    is->ic = ic;
+
+    if (genpts)  // TODO(wangqing): issue
+        ic->flags |= AVFMT_FLAG_GENPTS;
+
+     // TODO(wangqing): 代码有省略
+
+    if (find_stream_info){
+
+    }
+
+fail:
+    if (ic && !is->ic)
+        avformat_close_input(&ic);
+
+    av_packet_free(&pkt);
+    if (ret != 0) {
+        SDL_Event event;
+        event.type = FF_QUIT_EVENT;
+        event.user.data1 = is;
+        SDL_PushEvent(&event);
+    }
+    SDL_DestroyMutex(wait_mutex);
+    return 0;
 }
 
 static void stream_component_close(MainState* is, int stream_index) {
@@ -196,7 +276,7 @@ static void stream_close(MainState* is) {
     sws_freeContext(is->img_convert_ctx);
     sws_freeContext(is->sub_convert_ctx);
     av_free(is->filename);
-    
+
     if (is->vis_texture)
         SDL_DestroyTexture(is->vis_texture);
     if (is->vid_texture)
@@ -233,9 +313,8 @@ static MainState* stream_open(const char*          filename,
     if (frame_queue_init(&is->sampq, &is->audioq, SAMPLE_QUEUE_SIZE, 1) < 0)
         goto fail;
 
-    if (packet_queue_init(&is->videoq) < 0 || 
-        packet_queue_init(&is->audioq) < 0 || 
-        packet_queue_init(&is->subtitleq) < 0)
+    if (packet_queue_init(&is->videoq) < 0 || packet_queue_init(&is->audioq) < 0
+        || packet_queue_init(&is->subtitleq) < 0)
         goto fail;
 
     if (!(is->continue_read_thread = SDL_CreateCond())) {
@@ -248,25 +327,32 @@ static MainState* stream_open(const char*          filename,
     init_clock(&is->audclk, &is->audioq.serial);
     init_clock(&is->extclk, &is->extclk.serial);
 
-     // TODO(wangqing): 有什么用途
+    // TODO(wangqing): 有什么用途
     is->audio_clock_serial = -1;
 
     // 设置初始音量
     if (startup_volume < 0)
-        av_log(NULL,  AV_LOG_WARNING, "-volume=%s < 0, setting to 0\n", startup_volume);
+        av_log(NULL,
+               AV_LOG_WARNING,
+               "-volume=%s < 0, setting to 0\n",
+               startup_volume);
     if (startup_volume > 100)
-        av_log(NULL,  AV_LOG_WARNING, "-volume=%s > 100, setting to 100\n", startup_volume);
+        av_log(NULL,
+               AV_LOG_WARNING,
+               "-volume=%s > 100, setting to 100\n",
+               startup_volume);
     startup_volume = av_clip(startup_volume, 0, 100);
-    startup_volume = av_clip(SDL_MIX_MAXVOLUME * startup_volume / 100, 0, SDL_MIX_MAXVOLUME);
+    startup_volume =
+        av_clip(SDL_MIX_MAXVOLUME * startup_volume / 100, 0, SDL_MIX_MAXVOLUME);
     is->audio_volume = startup_volume;
 
-    is->muted = 0;
+    is->muted        = 0;
     is->av_sync_type = av_sync_type;
 
     is->read_tid = SDL_CreateThread(read_thread, "read_thread", is);
     if (!is->read_tid) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateThread():%s\n", SDL_GetError());
-fail:
+    fail:
         stream_close(is);
         return NULL;
     }
