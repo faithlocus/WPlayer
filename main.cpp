@@ -5,6 +5,7 @@
 #include "slog/slog.h"
 #include "tools/cmdutils.h"
 #include "tools/log.h"
+#include "src/packet.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -253,7 +254,7 @@ static int read_thread(void* arg) {
     if (genpts)  // TODO(wangqing): issue
         ic->flags |= AVFMT_FLAG_GENPTS;
 
-    // TODO(wangqing): ´úÂëÓÐÊ¡ÂÔ
+    av_format_inject_global_side_data(ic);  // TODO(wangqing): issue
 
     if (find_stream_info) {
         AVDictionary** opts = setup_find_stream_info_opts(ic, codec_opts);
