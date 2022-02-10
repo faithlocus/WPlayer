@@ -127,6 +127,13 @@ struct Decoder {
     SDL_Thread* decoder_tid;
 };
 
+enum ShowMode {
+    SHOW_MODE_NONE  = -1,
+    SHOW_MODE_VIDEO = 1,
+    SHOW_MODE_WAVES,
+    SHOW_MODE_RDFT,
+    SHOW_MODE_NB
+};
 struct MainState {
     SDL_Thread*    read_tid;  // 独立线程解封装
     AVInputFormat* iformat;
@@ -134,13 +141,13 @@ struct MainState {
     int            force_refresh;
     int            paused;
     int            last_paused;
-    int            queue_attachmets_req;
+    int            queue_attachmets_req;  // TODO(wangqing): issue
 
     // seek跳转
-    int     seek_req;
-    int     seek_flags;
-    int64_t seek_pos;
-    int64_t seek_rel;
+    int     seek_req;    // 标记一次seek请求
+    int     seek_flags;  // seek标志，
+    int64_t seek_pos;    // seek的目标位置（当前位置 + 增量）
+    int64_t seek_rel;    // 本次seek的位置增量
 
     int              read_pause_return;
     AVFormatContext* ic;
@@ -190,13 +197,7 @@ struct MainState {
     int         frame_drop_early;
     int         frame_drop_late;
 
-    enum ShowMode {
-        SHOW_MODE_NONE  = -1,
-        SHOW_MODE_VIDEO = 1,
-        SHOW_MODE_WAVES,
-        SHOW_MODE_RDFT,
-        SHOW_MODE_NB
-    } show_mode;
+    ShowMode     show_mode;
     int16_t      sample_array[SAMPLE_ARRAY_SIZE];
     int          sample_array_index;
     int          last_start;
@@ -242,6 +243,6 @@ struct MainState {
     SDL_cond* continue_read_thread;
 };
 
-struct OptionDef {};
+ShowMode show_mode = SHOW_MODE_NONE;
 
 #endif  // __MY_STRUCT_H__

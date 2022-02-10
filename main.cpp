@@ -3,14 +3,15 @@
 
 #include "my_struct.h"
 #include "slog/slog.h"
-#include "tools/log.h"
 #include "tools/cmdutils.h"
+#include "tools/log.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include "SDL.h"
+#include "libavutil/avstring.h"
 #include "libavutil/time.h"
 
 #ifdef __cplusplus
@@ -23,7 +24,8 @@ const char cc_ident[]         = "gcc 9.1.1 (GCC) 20190807";
 
 extern const OptionDef options[];
 
-extern AVDictionary* sws_dict, * swr_opts, *format_opts, *codec_opts, *resample_opts;
+extern AVDictionary *sws_dict, *swr_opts, *format_opts, *codec_opts,
+    *resample_opts;
 
 static void sigterm_handler(int sig) {
     // todo-start/////////////////////////////////////
@@ -89,8 +91,8 @@ static int frame_queue_init(FrameQueue*  f,
         return AVERROR(ENOMEM);
     }
 
-    f->pktq     = pktq;
-    f->max_size = FFMIN(max_size, FRAME_QUEUE_SIZE);
+    f->pktq      = pktq;
+    f->max_size  = FFMIN(max_size, FRAME_QUEUE_SIZE);
     f->keep_last = !!keep_last;
     for (int i = 0; i < f->max_size; ++i) {
         if (!(f->queue[i].frame = av_frame_alloc()))
@@ -163,21 +165,33 @@ static void init_clock(Clock* c, int* queue_serial) {
 }
 
 static int decode_interrupt_cb(void* ctx) {
-    MainState* is = (MainState*)ctx;
+    MainState* is = ( MainState* )ctx;
     return is->abort_request;
+}
+
+// 标记跳转状态
+static void stream_seek(MainState* is, int64_t pos, int64_t rel, int seek_by_bytes) {
+    if (!is->seek_req) {
+        is->seek_pos = pos;
+        is->seek_rel = rel;
+
+        is->seek_flags &= ~AVSEEK_FLAG_BYTE;
+        if (seek_by_bytes)
+            is->seek_flags |= AVSEEK_FLAG_BYTE;
+        is->seek_req = 1;
+        SDL_CondSignal(is->continue_read_thread);
+    }
 }
 
 static int read_thread(void* arg) {
     // TODO(wangqing): 功能未实现
-    MainState*       is = ( MainState* )arg;
-    int              ret, err, i;
-    int              st_index[AVMEDIA_TYPE_NB];
+    MainState* is = ( MainState* )arg;
+    int        ret, err, i;
+    int        st_index[AVMEDIA_TYPE_NB];
 
-    int64_t    stream_start_time;  // TODO(wangqing): issue
-    int        pkt_in_play_range = 0;  // TODO(wangqing): :wissue
 
     SDL_mutex* wait_mutex = SDL_CreateMutex();
-    if (!wait_mutex){
+    if (!wait_mutex) {
         av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
         ret = AVERROR(ENOMEM);
         goto fail;
@@ -187,14 +201,14 @@ static int read_thread(void* arg) {
     is->eof = 0;
 
     AVPacket* pkt = av_packet_alloc();
-    if (!pkt){
+    if (!pkt) {
         flog("Could not allocate packet\n");
         ret = AVERROR(ENOMEM);
         goto fail;
     }
 
     AVFormatContext* ic = avformat_alloc_context();
-    if (!ic){
+    if (!ic) {
         flog("Could not allocate context.\n");
         ret = AVERROR(ENOMEM);
         goto fail;
@@ -207,7 +221,7 @@ static int read_thread(void* arg) {
     }
 
     err = avformat_open_input(&ic, is->filename, is->iformat, &format_opts);
-    if (err < 0){
+    if (err < 0) {
         print_error(is->filename, err);
         ret = -1;
         goto fail;
@@ -216,7 +230,7 @@ static int read_thread(void* arg) {
         av_dict_set(&format_opts, "scan_all_pmts", NULL, AV_DICT_MATCH_CASE);
 
     AVDictionaryEntry* t;
-    if ((t = av_dict_get(format_opts, "", NULL, AV_DICT_IGNORE_SUFFIX))){
+    if ((t = av_dict_get(format_opts, "", NULL, AV_DICT_IGNORE_SUFFIX))) {
         elog("Option %s not found.\n", t->key);
         ret = AVERROR_OPTION_NOT_FOUND;
         goto fail;
@@ -226,25 +240,264 @@ static int read_thread(void* arg) {
     if (genpts)  // TODO(wangqing): issue
         ic->flags |= AVFMT_FLAG_GENPTS;
 
-     // TODO(wangqing): 代码有省略
+    // TODO(wangqing): 代码有省略
 
-    if (find_stream_info){
+    if (find_stream_info) {
         AVDictionary** opts = setup_find_stream_info_opts(ic, codec_opts);
         int            orig_nb_streams = ic->nb_streams;
-        
+
         err = avformat_find_stream_info(ic, opts);
-        
+
         for (int i = 0; i < orig_nb_streams; ++i)
             av_dict_free(&opts[i]);
         av_freep(&opts);
 
-        if (err < 0){
+        if (err < 0) {
             wlog("%s: could not find codec parameters\n", is->filename);
             ret = -1;
             goto fail;
         }
     }
 
+    if (ic->pb)
+        ic->pb->eof_reached = 0;
+
+    if (seek_by_bytes < 0)
+        seek_by_bytes = !!(ic->iformat->flags & AVFMT_TS_DISCONT)
+                        && strcmp("ogg", ic->iformat->name);
+
+    is->max_frame_duration =
+        (ic->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
+
+    // TODO(wangqing): title的存储位置，格式化方式
+    if (!window_title && (t = av_dict_get(ic->metadata, "title", NULL, 0)))
+        window_title = av_asprintf("%s - %s", t->value, input_filename);
+
+    if (start_time != AV_NOPTS_VALUE) {
+        int64_t timestamp = start_time;
+        if (ic->start_time != AV_NOPTS_VALUE)
+            timestamp += ic->start_time;
+        // TODO(wangqing): avformat_seek_file使用方法
+        ret = avformat_seek_file(ic, -1, INT64_MIN, timestamp, INT64_MAX, 0);
+        if (ret < 0)
+            wlog("%s: could not seek to position %0.3f\n",
+                 is->filename,
+                 timestamp / AV_TIME_BASE);
+    }
+
+    // TODO(wangqing): 流媒体？？？
+    is->realtime = is_realtime(ic);
+
+    if (show_status)
+        av_dump_format(ic, 0, is->filename, 0);
+
+    // 区分音视频流
+    for (i = 0; i < ic->nb_streams; ++i) {
+        AVStream*   st   = ic->streams[i];
+        AVMediaType type = st->codecpar->codec_type;
+        st->discard = AVDISCARD_ALL;  // TODO(wangqing): discard有什么意义
+        if (type >= 0 && wanted_stream_spec[type] && st_index[type] == -1)
+            if (avformat_match_stream_specifier(
+                    ic, st, wanted_stream_spec[type])
+                > 0)
+                st_index[type] = i;
+    }
+    for (i = 0; i < AVMEDIA_TYPE_NB; ++i) {
+        if (wanted_stream_spec[i] && st_index[i] == -1) {
+            elog("Stream specifier %s does not match any %s stream\n",
+                 wanted_stream_spec[i],
+                 av_get_media_type_string(AVMediaType(i)));
+            st_index[i] = INT_MAX;
+        }
+    }
+    if (!video_disable)
+        st_index[AVMEDIA_TYPE_VIDEO] = av_find_best_stream(
+            ic, AVMEDIA_TYPE_VIDEO, st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+
+    if (!video_disable)
+        st_index[AVMEDIA_TYPE_AUDIO] = av_find_best_stream(
+            ic, AVMEDIA_TYPE_AUDIO, st_index[AVMEDIA_TYPE_AUDIO], -1, NULL, 0);
+
+    if (!video_disable && !subtitle_disable)
+        st_index[AVMEDIA_TYPE_SUBTITLE] = av_find_best_stream(
+            ic,
+            AVMEDIA_TYPE_SUBTITLE,
+            st_index[AVMEDIA_TYPE_SUBTITLE],
+            st_index[AVMEDIA_TYPE_AUDIO] >= 0 ? st_index[AVMEDIA_TYPE_AUDIO]
+                                              : st_index[AVMEDIA_TYPE_VIDEO],
+            NULL,
+            0);
+
+    is->show_mode = show_mode;
+    if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
+        // 校准视频默认宽高比例
+        AVStream*          st       = ic->streams[st_index[AVMEDIA_TYPE_VIDEO]];
+        AVCodecParameters* codecpar = st->codecpar;
+        AVRational         sar = av_guess_sample_aspect_ratio(ic, st, NULL);
+        if (codecpar->width)
+            set_default_window_set(codecpar->width, codecpar->height, sar);
+    }
+
+    // open stream
+    if (st_index[AVMEDIA_TYPE_AUDIO])
+        stream_component_open(is, st_index[AVMEDIA_TYPE_AUDIO]);
+
+    ret = -1;
+    if (st_index[AVMEDIA_TYPE_VIDEO])
+        stream_component_open(is, st_index[AVMEDIA_TYPE_VIDEO]);
+    if (is->show_mode == SHOW_MODE_NONE)
+        is->show_mode = ret >= 0 ? SHOW_MODE_VIDEO : SHOW_MODE_RDFT;
+
+    if (st_index[AVMEDIA_TYPE_SUBTITLE])
+        stream_component_open(is, st_index[AVMEDIA_TYPE_SUBTITLE]);
+
+    if (infinite_buffer < 0 && is->realtime)
+        infinite_buffer = 1;
+
+    // 解封装
+    while (true) {
+        if (is->abort_request)
+            break;
+        if (is->paused != is->last_paused) {
+            is->last_paused = is->paused;
+            if (is->paused)
+                is->read_pause_return = av_read_pause(ic);
+            else
+                av_read_play(ic);
+        }
+#if CONFIG_RTST_DEMUXER || CONFIG_MMSH_PROTOCOL
+        if (is->paused
+            && (!strcmp(ic->iformat->name, "rtsp")
+                || (ic->pb && !strncmp(input_filename, "mmsh", 5)))) {
+            SDL_Delay(10);
+            continue;
+        }
+#endif
+        if (is->seek_req) {
+            int64_t seek_target = is->seek_pos;
+            int64_t seek_min =
+                is->seek_rel > 0 ? seek_target - is->seek_rel + 2 : INT64_MIN;
+            int64_t seek_max =
+                is->seek_rel < 0 ? seek_target - is->seek_rel - 2 : INT64_MAX;
+
+            ret = avformat_seek_file(
+                is->ic, -1, seek_min, seek_target, seek_max, is->seek_flags);
+            if (ret < 0) {
+                elog("%s: error while seeking\n", is->ic->url);
+            } else {
+                if (is->audio_stream >= 0)
+                    packet_queue_flush(&is->audioq);
+                if (is->subtitleq >= 0)
+                    packet_queue_flush(&is->subtitleq);
+                if (is->video_stream >= 0)
+                    packet_queue_flush(&is->videoq);
+
+                // TODO(wangqing): 如何执行的跳帧
+                if (is->seek_flags & AVSEEK_FLAG_BYTE)
+                    set_clock(&is->extclk, NAN, 0);
+                else
+                    set_clock(
+                        &is->extclk, seek_target / ( double )AV_TIME_BASE, 0);
+            }
+            is->seek_req             = 0;
+            is->queue_attachmets_req = 1;
+            is->eof                  = 0;
+            if (is->paused)
+                step_to_next_frame(is);
+        }
+
+        // TODO(wangqing): issue
+        if (is->queue_attachmets_req) {
+            if (is->video_st
+                && is->video_st->disposition & AV_DISPOSITION_ATTACHED_PIC) {
+                if ((ret = av_packet_ref(pkt, &is->video_st->attached_pic)) < 0)
+                    goto fail;
+                packet_queue_put(&is->videoq, pkt);
+                packet_queue_put_nullpacket(&is->videoq, pkt, is->video_stream);
+            }
+        }
+
+        // 未解码的包过载
+        if (infinite_buffer < 1
+            && (is->audioq.size + is->videoq.size + is->subtitleq.size
+                    > MAX_QUEUE_SIZE
+                || (stream_has_enough_packets(
+                        is->audio_st, is->audio_stream, &is->audioq)
+                    && stream_has_enough_packets(
+                           is->video_st, is->video_stream, &is->videoq)
+                    && stream_has_enough_packets(is->subtitle_st,
+                                                 is->subtitle_stream,
+                                                 &is->subtitleq)))) {
+            SDL_LockMutex(wait_mutex);
+            SDL_CondWaitTimeout(is->continue_read_thread, wait_mutex, 10);
+            SDL_UnlockMutex(wait_mutex);
+            continue;
+        }
+
+        // 解封装完成
+        if (!is->paused && 
+            (!is->audio_st || (is->auddec.finished == is->audioq.serial && 
+                               frame_queue_nb_remaining(&is->sampq) == 0))
+            (!is->video_st || (is->viddec.finished == is->videoq.serial && 
+                               frame_queue_nb_remaining(&is->pictq) == 0))) {
+            if (loop != 1 && (!loop || --loop)) { // loop表示循环次数，0表示无限循环播放
+                stream_seek(is, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
+            } else if (autoexit) {
+                ret = AVERROR_EOF;
+                goto fail;
+            }
+        }
+
+        ret = av_read_frame(ic, pkt);
+        if (ret < 0){
+            if ((ret == AVERROR_EOF || avio_feof(ic->pb)) && !is->eof) {
+                if (is->video_stream >= 0) 
+                    packet_queue_put_nullpacket( &is->videoq, pkt, is->video_stream);
+                if (is->audio_stream >= 0)
+                    packet_queue_put_nullpacket( &is->audioq, pkt, is->audio_stream);
+                if (is->subtitle_stream >= 0)
+                    packet_queue_put_nullpacket( &is->subtitleq, pkt, is->subtitle_stream);
+                is->eof = 1;
+            }
+            if (ic->pb && ic->pb->error){
+                if (autoexit)
+                    goto fail;
+                else
+                    break;
+            }
+            SDL_LockMutex(wait_mutex);
+            SDL_CondWaitTimeout(is->continue_read_thread, wait_mutex, 10);
+            SDL_UnlockMutex(wait_mutex);
+            continue;  // 实现功能：播放完成后，跳转依然可以使用
+        }else{
+            is->eof = 0;
+        }
+
+        int64_t stream_start_time = ic->streams[pkt->stream_index]->start_time;
+        pkt_ts            = pkt->pts == AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
+        int pkt_in_play_range =
+            duration == AV_NOPTS_VALUE
+            || (pkt_ts
+                - (stream_start_time != AV_NOPTS_VALUE ? stream_start_time : 0))
+                           * av_q2d(ic->streams[pkt->stream_index]->time_base)
+                       - ( double )(start_time != AV_NOPTS_VALUE ? start_time
+                                                                 : 0)
+                             / 1000000
+                   < (( double )duration / 1000000);
+        if (pkt->stream_index == is->audio_stream && pkt_in_play_range){
+            packet_queue_put(*is->audioq, pkt);
+        } else if (pkt->stream_index == is->video_stream && pkt_in_play_range && 
+                   !(is->video_st->disposition
+                        & AV_DISPOSITION_ATTACHED_PIC)) {
+            packet_queue_put(*is->videoq, pkt);
+        } else if (pkt->stream_index == is->subtitle_stream && pkt_in_play_range){
+            packet_queue_put(*is->subtitle_stream, pkt);
+        }else{
+            av_packet_unref(pkt);
+        }
+    }
+
+    ret = 0;
 fail:
     if (ic && !is->ic)
         avformat_close_input(&ic);
@@ -252,13 +505,15 @@ fail:
     av_packet_free(&pkt);
     if (ret != 0) {
         SDL_Event event;
-        event.type = FF_QUIT_EVENT;
+        event.type       = FF_QUIT_EVENT;
         event.user.data1 = is;
         SDL_PushEvent(&event);
     }
     SDL_DestroyMutex(wait_mutex);
     return 0;
 }
+
+static void stream_component_open(MainState* is, int stream_index) {}
 
 static void stream_component_close(MainState* is, int stream_index) {
     // TODO(wangqing): issue
