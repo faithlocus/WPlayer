@@ -12,7 +12,8 @@ aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/slog/ SRC_TRD)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/log/ SRC_TRD_LOG)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/tools SRC_TOOLS)
 
-set(SRC_LIST main.cpp)
+set(SRC_MAIN main.cpp)
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/src/ SRC_LIST)
 
 # ffmpeg
 IF (UNIX)
@@ -30,9 +31,9 @@ link_directories(./SDL2-2.0.20/lib/x86/)
 ENDIF()
 
 
-foreach(mainfile IN LISTS SRC_LIST)
+foreach(mainfile IN LISTS SRC_MAIN)
     get_filename_component(mainname ${mainfile} NAME_WE)
-    add_executable(${mainname} ${mainfile} ${SRC_TRD} ${SRC_TRD_LOG} ${SRC_TOOLS})
+    add_executable(${mainname} ${mainfile} ${SRC_LIST} ${SRC_TRD} ${SRC_TRD_LOG} ${SRC_TOOLS})
     message(STATUS "${mainname} ${mainfile}")
     IF(UNIX)
     target_link_libraries(${mainname} libSDL2.a)

@@ -183,6 +183,19 @@ static void stream_seek(MainState* is, int64_t pos, int64_t rel, int seek_by_byt
     }
 }
 
+static int is_realtime(AVFormatContext* s) {
+    if (!strcmp(s->iformat->name, "rtmp") || 
+        !strcmp(s->iformat->name, "rtsp")
+        || !strcmp(s->iformat->name, "sdp"))
+        return 1;
+
+    if (s->pb && (!strncmp(s->url, "rtp:", 4) || 
+                  !strncmp(s->url, "udp:", 4)))
+        return 1;
+
+    return 0;
+}
+
 static int read_thread(void* arg) {
     // TODO(wangqing): 功能未实现
     MainState* is = ( MainState* )arg;

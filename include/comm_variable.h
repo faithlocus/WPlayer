@@ -38,6 +38,7 @@ int borderless;
 int genpts = 0;
 int loop   = 1;
 int autoexit;
+int64_t pkt_ts;
 
 int                  default_width  = 640;
 int                  default_height = 480;
