@@ -135,12 +135,13 @@ enum ShowMode {
     SHOW_MODE_NB
 };
 struct MainState {
-    SDL_Thread*    read_tid;  // 独立线程解封装
-    AVInputFormat* iformat;
-    int            abort_request;
-    int            force_refresh;
-    int            paused;
-    int            last_paused;
+    SDL_Thread*    read_tid;  // 独立线程解封装,读取文件
+    AVInputFormat* iformat;   // 指向demuxer
+    AVFormatContext* ic;   // iformat的上下文
+    int            abort_request; // =1请求退出播放
+    int            force_refresh;  // =1 立即刷新页面
+    int            paused;          // =1 即将暂停， =0 即将播放
+    int            last_paused;     // 当前播放或者暂停状态 
     int            queue_attachmets_req;  // TODO(wangqing): issue
 
     // seek跳转
@@ -150,8 +151,7 @@ struct MainState {
     int64_t seek_rel;    // 本次seek的位置增量
 
     int              read_pause_return;
-    AVFormatContext* ic;
-    int              realtime;
+    int              realtime;  // =1 实时流
 
     // 同步时钟
     Clock audclk;
@@ -168,34 +168,33 @@ struct MainState {
     Decoder viddec;
     Decoder subdec;
 
-    int audio_stream;
+    int audio_stream;    // 音频流索引
+    int av_sync_type;    // 音视频同步类型,默认AUDIO_MASTER
 
-    int av_sync_type;
-
-    double       audio_clock;
+    double       audio_clock;              // 当前音频pts+当前帧duration
     int          audio_clock_serial;
     double       audio_diff_cum;
     double       audio_diff_threshold;
     int          audio_diff_avg_count;
-    AVStream*    audio_st;
-    PacketQueue  audioq;
-    int          audio_hw_buf_size;
-    uint8_t*     audio_buf;
-    uint8_t*     audio_buf1;
-    unsigned int audio_buf_size;
-    unsigned int audio_buf1_size;
+    AVStream*    audio_st;             // 音频流
+    PacketQueue  audioq;               // 音频packet队列
+    int          audio_hw_buf_size;  // TODO(wangqing): SDL音频缓冲区
+    uint8_t*     audio_buf;           // 指向重采样前的数据
+    uint8_t*     audio_buf1;          // 指向重采样后的数据
+    unsigned int audio_buf_size;      // 待播放的一帧音频数据(audio_buf)的大小
+    unsigned int audio_buf1_size;     // 申请到的音频缓冲区(audio_buf1)
     int          audio_buf_index;
     int          audio_write_buf_size;
-    int          audio_volume;
-    int          muted;
-    AudioParams  audio_src;
+    int          audio_volume;        // 音量
+    int          muted;               // =1静音，=0正常
+    AudioParams  audio_src;           // 音频frame参数
 #if CONFIG_AVFILTER
     AudioParams audio_filter_src;
 #endif
-    AudioParams audio_tgt;
-    SwrContext* swr_ctx;
-    int         frame_drop_early;
-    int         frame_drop_late;
+    AudioParams audio_tgt;            // SDL支持的音频参数(重采样)
+    SwrContext* swr_ctx;              // 音频重采样context
+    int         frame_drop_early;     // 丢弃视频packet计数
+    int         frame_drop_late;      // 丢弃视频frame计数
 
     ShowMode     show_mode;
     int16_t      sample_array[SAMPLE_ARRAY_SIZE];
@@ -214,20 +213,20 @@ struct MainState {
     AVStream*   subtitle_st;
     PacketQueue subtitleq;
 
-    double      frame_timer;
+    double      frame_timer;                 // 记录最后一帧播放的时刻
     double      frame_last_returned_time;
     double      frame_last_fitler_delay;
     int         video_stream;
     AVStream*   video_st;
     PacketQueue videoq;
-    double      max_frame_duration;
-    SwsContext* img_convert_ctx;
-    SwsContext* sub_convert_ctx;
-    int         eof;
+    double      max_frame_duration;          // 一帧最大间隔，above this, we consider the jump a timestamp discontinuity
+    SwsContext* img_convert_ctx;             // 视频尺寸格式变换
+    SwsContext* sub_convert_ctx;             // 字母尺寸格式变换
+    int         eof;                         // 读取是否结束
 
     char* filename;
     int   width, height, xleft, ytop;
-    int   step;
+    int   step;         // =1 步进播放模式， =0其他
 
 #if CONFIG_AVFILTER
     int              vfilter_idx;
@@ -238,8 +237,10 @@ struct MainState {
     AVFilterGraph*   agraph;
 #endif
 
+    // 保留最近的相应audio, video, subtitle流的stream_index
     int last_video_stream, last_audio_stream, last_subtitle_stream;
 
+    // 当读取数据队列满了后进入休眠时，可以通过改condition唤醒线程
     SDL_cond* continue_read_thread;
 };
 
