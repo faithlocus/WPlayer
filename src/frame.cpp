@@ -69,6 +69,7 @@ Frame* frame_queue_peek_last(FrameQueue* f) {
 
 void frame_queue_next(FrameQueue* f) {
     if (f->keep_last && !f->rindex_shown) {
+        // brief: 播放期间此部分代码仅执行一次 
         f->rindex_shown = 1;
         return;
     }
@@ -77,6 +78,7 @@ void frame_queue_next(FrameQueue* f) {
     if (++f->rindex == f->max_size)
         f->rindex = 0;
     SDL_LockMutex(f->mutex);
+    // brief: 若开启keep_last，size_all = size_undisplay + 1(keep_last) 
     f->size--;
     SDL_CondSignal(f->cond);
     SDL_UnlockMutex(f->mutex);
@@ -105,7 +107,6 @@ void frame_queue_push(FrameQueue* f) {
 }
 
 int frame_queue_nb_remaining(FrameQueue* f) {
-    // TODO(wangqing): f->size - f->rindex???
     return f->size - f->rindex_shown;
 }
 
