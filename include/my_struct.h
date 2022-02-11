@@ -67,7 +67,7 @@ struct Clock {
     double last_updates;   // 最后一次更新的系统时钟
     double speed;          // 时钟速度开支，用于控制播放速度
     int    serial;         // 时钟基于serial指定的packet
-    int    paused;         // 暂定状态
+    int    paused;         // =1暂停状态
     int*   queue_serial;   // 指向视频流/音频流/字幕流
 };
 

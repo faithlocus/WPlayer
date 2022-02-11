@@ -106,24 +106,6 @@ static void frame_queue_destory(FrameQueue* f) {
     // TODO(wangqing): issue
 }
 
-static int packet_queue_init(PacketQueue* q) {
-    memset(q, 0, sizeof(PacketQueue));
-    q->pkt_list = av_fifo_alloc(sizeof(MyAVPacket));
-    if (!q->pkt_list)
-        return AVERROR(ENOMEM);
-    q->mutex = SDL_CreateMutex();
-    if (!q->mutex) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-    q->cond = SDL_CreateCond();
-    if (!q->cond) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond():%s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-    q->abort_request = 1;
-    return 0;
-}
 
 static void packet_queue_destory(PacketQueue* q) {
     // TODO(wangqing): issue
