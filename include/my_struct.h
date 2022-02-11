@@ -31,25 +31,6 @@ extern "C" {
 }
 #endif  //__cplusplus
 
-// demux的一个packet
-struct MyAVPacket {
-    AVPacket pkt;
-    int      serial;
-};
-
-// demux后的packet队列
-struct PacketQueue {
-    // TODO(wangqing): 读写独立的缓存队列
-    AVFifoBuffer* pkt_list;
-    int           nb_packets;
-    int           size;
-    int64_t       duration;
-    int           abort_request;
-    int           serial;
-    SDL_mutex*    mutex;
-    SDL_cond*     cond;
-};
-
 // 音频参数，重采样前 + 重采样后
 struct AudioParams {
     int            freq;            // 采样率
@@ -69,37 +50,6 @@ struct Clock {
     int    serial;         // 时钟基于serial指定的packet
     int    paused;         // =1暂停状态
     int*   queue_serial;   // 指向视频流/音频流/字幕流
-};
-
-// decode后的一个frame  = audio + video + subtitle
-struct Frame {
-    AVFrame*   frame;
-    AVSubtitle sub;
-    int        serial;
-    double     pts;      // 显示
-    double     duration; // 该帧持续时长
-    int64_t    pos;
-    int        width;
-    int        height;
-    int        format;
-    AVRational sar;
-    int        uploaded;
-    int        flip_v;
-};
-
-// decode后的frame queue, 视频，视频，字幕独立存储
-struct FrameQueue {  // TODO(可以考虑使用环形队列):
-                     // <wangqing@gaugene.com>-<2022-02-06>
-    Frame        queue[FRAME_QUEUE_SIZE];
-    int          rindex;
-    int          windex;
-    int          size;
-    int          max_size;
-    int          keep_last;
-    int          rindex_shown;
-    SDL_mutex*   mutex;
-    SDL_cond*    cond;
-    PacketQueue* pktq;
 };
 
 // 时钟同步类别

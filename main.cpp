@@ -5,7 +5,9 @@
 #include "slog/slog.h"
 #include "tools/cmdutils.h"
 #include "tools/log.h"
+
 #include "src/packet.h"
+#include "src/frame.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,39 +78,6 @@ static void do_exit(MainState* is) {
     SDL_Quit();
     av_log(NULL, AV_LOG_QUIET, "%s", "");
     exit(0);
-}
-
-static int frame_queue_init(FrameQueue*  f,
-                            PacketQueue* pktq,
-                            int          max_size,
-                            int          keep_last) {
-    memset(f, 0, sizeof(FrameQueue));
-    if (!(f->mutex = SDL_CreateMutex())) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateMutex():%s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-    if (!(f->cond = SDL_CreateCond())) {
-        av_log(NULL, AV_LOG_FATAL, "SDL_CreateCond():%s\n", SDL_GetError());
-        return AVERROR(ENOMEM);
-    }
-
-    f->pktq      = pktq;
-    f->max_size  = FFMIN(max_size, FRAME_QUEUE_SIZE);
-    f->keep_last = !!keep_last;
-    for (int i = 0; i < f->max_size; ++i) {
-        if (!(f->queue[i].frame = av_frame_alloc()))
-            return AVERROR(ENOMEM);
-    }
-    return 0;
-}
-
-static void frame_queue_destory(FrameQueue* f) {
-    // TODO(wangqing): issue
-}
-
-
-static void packet_queue_destory(PacketQueue* q) {
-    // TODO(wangqing): issue
 }
 
 static double get_clock(Clock* c) {
@@ -529,13 +498,13 @@ static void stream_close(MainState* is) {
 
     avformat_close_input(&is->ic);
 
-    packet_queue_destory(&is->videoq);
-    packet_queue_destory(&is->audioq);
-    packet_queue_destory(&is->subtitleq);
+    packet_queue_destroy(&is->videoq);
+    packet_queue_destroy(&is->audioq);
+    packet_queue_destroy(&is->subtitleq);
 
-    frame_queue_destory(&is->pictq);
-    frame_queue_destory(&is->sampq);
-    frame_queue_destory(&is->subpq);
+    frame_queue_destroy(&is->pictq);
+    frame_queue_destroy(&is->sampq);
+    frame_queue_destroy(&is->subpq);
 
     SDL_DestroyCond(is->continue_read_thread);
     sws_freeContext(is->img_convert_ctx);
