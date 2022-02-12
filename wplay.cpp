@@ -8,6 +8,7 @@
 
 #include "src/packet.h"
 #include "src/frame.h"
+#include "src/decoder.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -121,7 +122,7 @@ static int decode_interrupt_cb(void* ctx) {
     return is->abort_request;
 }
 
-// ±ê¼ÇÌø×ª×´Ì¬
+// ï¿½ï¿½ï¿½ï¿½ï¿½×ª×´Ì¬
 static void stream_seek(MainState* is, int64_t pos, int64_t rel, int seek_by_bytes) {
     if (!is->seek_req) {
         is->seek_pos = pos;
@@ -149,7 +150,7 @@ static int is_realtime(AVFormatContext* s) {
 }
 
 static int read_thread(void* arg) {
-    // TODO(wangqing): ¹¦ÄÜÎ´ÊµÏÖ
+    // TODO(wangqing): ï¿½ï¿½ï¿½ï¿½Î´Êµï¿½ï¿½
     MainState* is = ( MainState* )arg;
     int        ret, err, i;
     int        st_index[AVMEDIA_TYPE_NB];
@@ -234,7 +235,7 @@ static int read_thread(void* arg) {
     is->max_frame_duration =
         (ic->iformat->flags & AVFMT_TS_DISCONT) ? 10.0 : 3600.0;
 
-    // TODO(wangqing): titleµÄ´æ´¢Î»ÖÃ£¬¸ñÊ½»¯·½Ê½
+    // TODO(wangqing): titleï¿½Ä´æ´¢Î»ï¿½Ã£ï¿½ï¿½ï¿½Ê½ï¿½ï¿½ï¿½ï¿½Ê½
     if (!window_title && (t = av_dict_get(ic->metadata, "title", NULL, 0)))
         window_title = av_asprintf("%s - %s", t->value, input_filename);
 
@@ -242,7 +243,7 @@ static int read_thread(void* arg) {
         int64_t timestamp = start_time;
         if (ic->start_time != AV_NOPTS_VALUE)
             timestamp += ic->start_time;
-        // TODO(wangqing): avformat_seek_fileÊ¹ÓÃ·½·¨
+        // TODO(wangqing): avformat_seek_fileÊ¹ï¿½Ã·ï¿½ï¿½ï¿½
         ret = avformat_seek_file(ic, -1, INT64_MIN, timestamp, INT64_MAX, 0);
         if (ret < 0)
             wlog("%s: could not seek to position %0.3f\n",
@@ -250,17 +251,17 @@ static int read_thread(void* arg) {
                  timestamp / AV_TIME_BASE);
     }
 
-    // TODO(wangqing): Á÷Ã½Ìå£¿£¿£¿
+    // TODO(wangqing): ï¿½ï¿½Ã½ï¿½å£¿ï¿½ï¿½ï¿½ï¿½
     is->realtime = is_realtime(ic);
 
     if (show_status)
         av_dump_format(ic, 0, is->filename, 0);
 
-    // Çø·ÖÒôÊÓÆµÁ÷
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æµï¿½ï¿½
     for (i = 0; i < ic->nb_streams; ++i) {
         AVStream*   st   = ic->streams[i];
         AVMediaType type = st->codecpar->codec_type;
-        st->discard = AVDISCARD_ALL;  // TODO(wangqing): discardÓÐÊ²Ã´ÒâÒå
+        st->discard = AVDISCARD_ALL;  // TODO(wangqing): discardï¿½ï¿½Ê²Ã´ï¿½ï¿½ï¿½ï¿½
         if (type >= 0 && wanted_stream_spec[type] && st_index[type] == -1)
             if (avformat_match_stream_specifier(
                     ic, st, wanted_stream_spec[type])
@@ -295,7 +296,7 @@ static int read_thread(void* arg) {
 
     is->show_mode = show_mode;
     if (st_index[AVMEDIA_TYPE_VIDEO] >= 0) {
-        // Ð£×¼ÊÓÆµÄ¬ÈÏ¿í¸ß±ÈÀý
+        // Ð£×¼ï¿½ï¿½ÆµÄ¬ï¿½Ï¿ï¿½ï¿½ß±ï¿½ï¿½ï¿½
         AVStream*          st       = ic->streams[st_index[AVMEDIA_TYPE_VIDEO]];
         AVCodecParameters* codecpar = st->codecpar;
         AVRational         sar = av_guess_sample_aspect_ratio(ic, st, NULL);
@@ -319,7 +320,7 @@ static int read_thread(void* arg) {
     if (infinite_buffer < 0 && is->realtime)
         infinite_buffer = 1;
 
-    // ½â·â×°
+    // ï¿½ï¿½ï¿½×°
     while (true) {
         if (is->abort_request)
             break;
@@ -357,7 +358,7 @@ static int read_thread(void* arg) {
                 if (is->video_stream >= 0)
                     packet_queue_flush(&is->videoq);
 
-                // TODO(wangqing): ÈçºÎÖ´ÐÐµÄÌøÖ¡
+                // TODO(wangqing): ï¿½ï¿½ï¿½Ö´ï¿½Ðµï¿½ï¿½ï¿½Ö¡
                 if (is->seek_flags & AVSEEK_FLAG_BYTE)
                     set_clock(&is->extclk, NAN, 0);
                 else
@@ -382,7 +383,7 @@ static int read_thread(void* arg) {
             }
         }
 
-        // Î´½âÂëµÄ°ü¹ýÔØ
+        // Î´ï¿½ï¿½ï¿½ï¿½Ä°ï¿½ï¿½ï¿½ï¿½ï¿½
         if (infinite_buffer < 1
             && (is->audioq.size + is->videoq.size + is->subtitleq.size
                     > MAX_QUEUE_SIZE
@@ -399,13 +400,13 @@ static int read_thread(void* arg) {
             continue;
         }
 
-        // ½â·â×°Íê³É
+        // ï¿½ï¿½ï¿½×°ï¿½ï¿½ï¿½
         if (!is->paused && 
             (!is->audio_st || (is->auddec.finished == is->audioq.serial && 
                                frame_queue_nb_remaining(&is->sampq) == 0))
             (!is->video_st || (is->viddec.finished == is->videoq.serial && 
                                frame_queue_nb_remaining(&is->pictq) == 0))) {
-            if (loop != 1 && (!loop || --loop)) { // loop±íÊ¾Ñ­»·´ÎÊý£¬0±íÊ¾ÎÞÏÞÑ­»·²¥·Å
+            if (loop != 1 && (!loop || --loop)) { // loopï¿½ï¿½Ê¾Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½0ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
                 stream_seek(is, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
             } else if (autoexit) {
                 ret = AVERROR_EOF;
@@ -433,7 +434,7 @@ static int read_thread(void* arg) {
             SDL_LockMutex(wait_mutex);
             SDL_CondWaitTimeout(is->continue_read_thread, wait_mutex, 10);
             SDL_UnlockMutex(wait_mutex);
-            continue;  // ÊµÏÖ¹¦ÄÜ£º²¥·ÅÍê³Éºó£¬Ìø×ªÒÀÈ»¿ÉÒÔÊ¹ÓÃ
+            continue;  // Êµï¿½Ö¹ï¿½ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Éºï¿½ï¿½ï¿½×ªï¿½ï¿½È»ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½ï¿½
         }else{
             is->eof = 0;
         }
@@ -478,7 +479,138 @@ fail:
     return 0;
 }
 
-static void stream_component_open(MainState* is, int stream_index) {}
+static void stream_component_open(MainState* is, int stream_index) {
+    AVFormatContext* ic = is->ic;
+    AVCodecContext*  avctx;
+    AVCodec*         codec;
+    const char*      forced_codec_name = NULL;
+    AVDictionary*    opts              = NULL;
+    AVDictionaryEntry* t                 = NULL;
+    int                sample_rate, nb_channels;
+    int64_t            channel_layout;
+    int                ret = 0;
+    int                stream_lowres = lowers;
+
+    if (stream_index < 0 || stream_indx >= ic->nb_streams)
+        return -1;
+
+    avctx = avcodec_alloc_context3(NULL);
+    if (!avctx)
+        return AVERROR(ENOMEM);
+
+    ret = avcodec_parameters_to_contex(avctx, ic->streams[stream_index]->codecpar);
+    if (ret < 0)
+        goto fail;
+
+    avctx->pkt_timebase = ic->streams[stream_index]->time_base;
+
+    codec = avcodec_find_decoder(avctx->codec_id);
+
+    switch(avctx->codec_type){
+        case AVMEDIA_TYPE_AUDIO:
+            is->last_audio_stream = stream_index;
+            forced_codec_name     = audio_codec_name;
+            break;
+        case AVMEDIA_TYPE_SUBTITLE:
+            is->last_subtitle_stream = stream_index;
+            forced_codec_name        = subtitle_codec_name;
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            is->last_audio_stream = stream_index;
+            forced_codec_name     = video_codec_name;
+            break;
+    }
+
+    if (forced_codec_name)
+        codec = avcodec_find_decoder_by_name(forced_codec_name);
+    if (!codec){
+        if (forced_codec_name)
+            wlog("No codec could be found with name '%s'\n", forced_codec_name);
+        else
+            wlog("No docoder could be found for codec %s\n", avcodec_get_name(avctx->codec_id));
+
+        ret = AVERROR(EINVAL);
+        goto fail;
+    }
+
+    avctx->codec_id = codec->id;
+    if (stream_lowres > codec->max_lowres){
+        wlog("The maximum value for lowres supported by the decoer is %d\n", codec->max_lowres);
+        stream_lowres = codec->max_lowres;
+    }
+    avctx->lowres = stream_lowres;
+
+    // TODO(wangqing): fastä»€ä¹ˆç”¨é€”
+    if (fast)
+        avctx->flags |= AV_CODEC_FLAG_FAST;
+
+    opts = filter_codec_opts(
+        codec_opts, avctx->codec_id, ic, ic->streams[stream_index], codec);
+
+    if (!av_dict_get(opts, "threads", NULL, 0))
+        av_dict_set(&opts, "threads", "auto", 0);
+
+    if (stream_lowres)
+        av_dict_set_init(&opts, "lowres", stream_lowres, 0);
+
+    if (avctx->codec_type == AVMEDIA_TYPE_VIDEO || avctx->codec_type == AVMEDIA_TYPE_AUDIO)
+        av_dict_set(&opts, "refcounted_frames", "1", 0));
+        
+    if  (ret = avcodec_open2(avctx, codec, *opts) < 0)
+        goto fail;
+    
+    if ((t = av_dict_get(opts, ""ï¼Œ NULL, AV_DICT_IGNORE_SUFFIX))){
+        elor("Options %s not found.\n", t->key);
+        ret = AVERROR_OPTION_NOT_FOUND;
+        goto fail;
+    }
+
+    is->eof = 0;
+    ic->streams[stream_index]->discard = AVDISCARD_DEFAULT;
+
+    switch(avctx->codec_type){
+        case AVMEIDA_TYPE_AUDIO:
+#if CONIFG_AVFILTER
+            AVFilterContext* sink;
+
+            is->audio_filter_src.freq = avctx->sample_rate;
+            is->audio_filter_src.channels = avctx->channels;
+            is->audio_filter_src.channel_layout = get_valid_channel_layout(avctx->channel_layout, avctx->channels);
+            is->audio_filter_src.fmt = avctx->sample_fmt;
+#else
+            sample_rate = avctx->sample_rate;
+            nb_channels = avctx->channel;
+            channel_layout = avctx->channel_layout;
+#endif
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            is->video_stream = stream_index;
+            is->video_st     = ic->stream[stream_index];
+
+            decoder_init( &is->viddec, avctx, &is->videoq, is->continue_read_thread);
+            if ((ret = decoder_start(&is->viddec, video_thread, "video_decoder", is))  < 0)
+                goto out;
+            is->queue_attachmets_req = 1;
+            break;
+        case AVMEDIA_TYPE_SUBTITLE:
+            is->subtitle_stream = stream_index;
+            is->subtitle_st     = ic->streams[stream_index];
+
+            decoder_init(&is->subdec, avctx, &is->subtitleq, is->continue_read_thread);
+            if ((ret = decoder_start(&is->subdec, subtitle_thread, "subtitle_thread", is)) < 0)
+                goto out;
+            break;
+    }
+    goto out;
+
+fail:
+    avcodec_free_context(avctx);
+
+out:
+    av_dict_free(*opts);
+
+    return ret;
+}
 
 static void stream_component_close(MainState* is, int stream_index) {
     // TODO(wangqing): issue
@@ -556,15 +688,15 @@ static MainState* stream_open(const char*          filename,
         goto fail;
     }
 
-    // ³õÊ¼»¯¸÷¸öStreamµÄÊ±ÖÓ
+    // ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Streamï¿½ï¿½Ê±ï¿½ï¿½
     init_clock(&is->vidclk, &is->videoq.serial);
     init_clock(&is->audclk, &is->audioq.serial);
     init_clock(&is->extclk, &is->extclk.serial);
 
-    // TODO(wangqing): ÓÐÊ²Ã´ÓÃÍ¾
+    // TODO(wangqing): ï¿½ï¿½Ê²Ã´ï¿½ï¿½Í¾
     is->audio_clock_serial = -1;
 
-    // ÉèÖÃ³õÊ¼ÒôÁ¿
+    // ï¿½ï¿½ï¿½Ã³ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½
     if (startup_volume < 0)
         av_log(NULL,
                AV_LOG_WARNING,

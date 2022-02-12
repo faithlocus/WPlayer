@@ -141,4 +141,10 @@ void parse_options(void*            optctx,
                    void (*parse_arg_function)(void*, const char*));
 
 void print_error(const char *filename, int err);
-#endif // __CMD_UTILS_H__
+
+AVDictionary* filter_codec_opts(AVDictionary*    opts,
+                                AVCOdecID        codec_id,
+                                AVFormatContext* s,
+                                AVStream*        st,
+                                AVCodec*         codec);
+#endif  // __CMD_UTILS_H__

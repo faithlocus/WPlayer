@@ -13,7 +13,7 @@ aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/slog/ SRC_TRD)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/3rd/log/ SRC_TRD_LOG)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/tools SRC_TOOLS)
 
-set(SRC_MAIN main.cpp)
+set(SRC_MAIN wplay.cpp wmpeg.cpp wprobe.cpp)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/src/ SRC_LIST)
 
 # ffmpeg

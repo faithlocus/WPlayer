@@ -59,23 +59,6 @@ enum ClockMaster {
     AV_SYNC_EXTERNAL_CLOCK  // 外部时钟
 };
 
-// 解码器，音频，视频，字幕独立不影响,即独立线程解码
-struct Decoder {
-    AVPacket        pkt;
-    PacketQueue*    queue;
-    AVCodecContext* avctx;
-
-    int       pkt_serial;
-    int       finished;
-    int       packet_pending;
-    SDL_cond* empty_queue_cond;
-
-    int64_t     start_pts;
-    AVRational  start_pts_tb;
-    int64_t     next_pts;
-    AVRational  next_pts_tb;
-    SDL_Thread* decoder_tid;
-};
 
 enum ShowMode {
     SHOW_MODE_NONE  = -1,

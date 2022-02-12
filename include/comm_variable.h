@@ -54,5 +54,10 @@ int64_t start_time = AV_NOPTS_VALUE;
 int64_t duration   = AV_NOPTS_VALUE;
 const char* wanted_stream_spec[AVMEDIA_TYPE_NB] = {0};
 int         infinite_buffer                    = -1;
+int         lowres                              = 0; // brief(wangqing): lowres低分辨率
+
+const char* audio_codec_name;
+const char* video_codec_name;
+const char* subtitle_codec_name;
 
 #endif  // __COMM_VARIABLE_H__
