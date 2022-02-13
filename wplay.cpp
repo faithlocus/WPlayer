@@ -43,6 +43,94 @@ static void sigterm_handler(int sig) {
     exit(123);
 }
 
+static void sdl_audio_callback(void *opaque, uint8_t *stream, int len){
+// TODO(wangqing): issue
+}
+
+static int audio_open(void *opaque, 
+                      int64_t wanted_channel_layout, 
+                      int wanted_nb_channels, 
+                      int wanted_sample_rate, 
+                      AudioParams *audio_hw_params){
+    SDL_AudioSpec wanted_spec, spec;
+    static const int next_nb_channels[] = {0, 0, 1, 6, 2, 6, 4, 6};
+    static const int next_sample_rates[] = {0, 44100, 48000, 96000, 192000};
+    int              next_sampe_rate_idx = FF_ARRAY_ELEMS(next_sample_rates) - 1;
+
+    const char* env = SDL_GetEnv("SDL_AUDIO_CHANNELS");
+    if (env){
+        wanted_nb_channels = atoi(env);
+        wanted_channel_layout =
+            av_get_default_channel_layout(wanted_nb_channels);
+    }
+    
+    if (!wanted_channel_layout || wanted_nb_channels != av_get_channel_layout_nb_channels(wanted_channel_layout)){
+        wanted_channel_layout =
+            av_get_default_channel_layout(wanted_nb_channels);
+        wanted_channel_layout &= ~AV_CH_LAYOUT_STEREO_DOWNMIX;
+    }
+    wanted_nb_channels =
+        av_get_channel_layout_nb_channels(wanted_channel_layout);
+    wanted_spec.channels = wanted_nb_channels;
+    wanted_spec.freq     = wanted_sample_rate;
+
+    if (wanted_spec.freq <= 0 || wanted_spec.channels <= 0){
+        elog("Invalid sample rate or channel count!\n");
+        return -1;
+    }
+
+    while(next_sample_rete_idx || next_sample_rates[next_sample_rate_idx] >= wanted_spec.freq)
+        next_sampe_rate_idx--;
+
+    wanted_spec.format = AUDIO_S16SYS;
+    wanted_spec.silence = 0;
+    wanted_spec.samples =
+        FFMAX(SDL_AUDIO_MIN_BUFFER_SIZE,
+              2 << av_log2(waned_spec.freq / SDL_AUDIO_MAX_CALLBACKS_PER_SEC));
+    wanted_spec.callback = sdl_audio_callback;
+    wanted_spec.userdata = opaque;
+    while(!(audio_dev = SDL_OpenAudioDevice(NULL, 0, &wanted_spec, &spec, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE))){
+        wlog("SDL_OpenAudio (%d channels, %d Hz): %s\n", wanted_spec.channels, wanted_spec.freq, SDL_GetError());
+        wanted_spec.channels = next_nb_channels[FFMIN(7, wanted_spec.channels)];
+        if (!wanted_spec.channels){
+            wanted_spec.freq = next_sample_rates[next_sampe_rate_idx--];
+            wanted_spec.channels = wanted_nb_channels;
+            if (!wanted_spec.freq){
+                elog("No more combinations to try, audio open failed\n");
+                return -1;
+            }
+        }
+        wanted_channel_layout =
+            av_get_default_channel_layout(wanted_spec.channels);
+    }
+
+    if (spec.format != wanted_spec.channels){
+        wanted_channel_layout = av_get_default_channel_layout(spec.channels);
+        if (!wanted_channel_layout){
+            elog("SDL advised channel count %d is not suuported!\n", spec.channels);
+            return -1;
+        }
+    }
+
+    audio_hw_params->fmt = AV_SAMPLE_FMT_S16;
+    audio_hw_params->freq = sepc.freq;
+    audio_hw_params->channel_layout = wanted_channel_layout;
+    audio_hw_params->channels       = spec.channels;
+    audio_hw_params->frame_size     = av_samples_get_buffer_size(
+        NULL, audio_hw_params->channels, 1, audio_hw_params->fmt, 1);
+    audio_hw_params->bytes_per_sec =
+        av_samples_get_buffer_size(NULL,
+                                   audio_hw_params->channels,
+                                   audio_hw_params->freq,
+                                   audio_hw_params->fmt,
+                                   1);
+    if (audio_hw_params->bytes_per_sec <= 0 || audio_hw_params->frame_size <= 0){
+        elog("av_samples_get_buffer_size failed\n");
+        return -1;
+    }
+    return spec.size;
+}
+
 static void opt_input_file(void* optctx, const char* filename) {
     if (input_filename) {
         av_log(NULL,

@@ -25,6 +25,10 @@ extern "C" {
     FFMAX(SAMPLE_QUEUE_SIZE, \
           FFMAX(VIDEO_PICTURE_QUEUE_SIZE, SUBPICTURE_QUEUE_SIZE))
 
+#define SDL_AUDIO_MIN_BUFFER_SIZE 512
+#define SDL_AUDIO_MAX_CALLBACKS_PER_SEC 30
+#define SDL_VOLUME_STEP (0.75)
+
 const char* input_filename;
 int         display_disable;
 
