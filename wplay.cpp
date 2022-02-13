@@ -571,12 +571,16 @@ static void stream_component_open(MainState* is, int stream_index) {
     switch(avctx->codec_type){
         case AVMEIDA_TYPE_AUDIO:
 #if CONIFG_AVFILTER
-            AVFilterContext* sink;
-
             is->audio_filter_src.freq = avctx->sample_rate;
             is->audio_filter_src.channels = avctx->channels;
             is->audio_filter_src.channel_layout = get_valid_channel_layout(avctx->channel_layout, avctx->channels);
             is->audio_filter_src.fmt = avctx->sample_fmt;
+            if ((ret = config_audio_filters(is, afilters, 0)) < 0)
+                goto fail;
+            AVFilterContext* sink = is->out_audio_filter;
+            sample_rate = av_buffersink_get_sample_rate(sink);
+            nb_channels = av_buffersink_get_channels(sink);
+            channel_layout = av_buffersink_get_channel_layout(sink);
 #else
             sample_rate = avctx->sample_rate;
             nb_channels = avctx->channel;
