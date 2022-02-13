@@ -14,9 +14,14 @@
 extern "C" {
 #endif
 
-#include "SDL.h"
+#ifdef __GNUC__
+#include "SDL2/SDL.h"
+#include "SDL2/SDL_audio.h"
+#endif
 #include "libavutil/avstring.h"
 #include "libavutil/time.h"
+#include "libavformat/avformat.h"
+#include "libavcodec/avcodec.h"
 
 #ifdef __cplusplus
 }
@@ -617,7 +622,60 @@ out:
 }
 
 static void stream_component_close(MainState* is, int stream_index) {
-    // TODO(wangqing): issue
+
+    AVFormatContext* ic = is->ic;
+    if (stream_index < 0 || stream_index >= ic->nb_streams)
+        return;
+
+    AVCodecParameters* codecpar = ic->streams[stream_index]->codecpara;
+
+    switch(codecpara->codec_type){
+        case AVMEDIA_TYPE_AUDIO:
+            decoder_abort(&is->auddec, &is->sampq);
+            SDL_CloseAudioDevice(audio_dev);
+            decoder_destroy(&is->auddec);
+            swr_free(&is->swr_ctx);
+            av_freep(&is->audio_buf1);
+
+            is->audio_buf1_size = 0;
+            is->audio_buf       = NULL;
+
+            if(is->rdft){
+                av_rdft_end(is->rdft);
+                av_freep(&is->rdft_data);
+                is->rdft = NULL;
+                is->rdft_bits = 0;
+            }
+            break;
+        case AVMEDIA_TYPE_VIDEO:
+            decoder_abort(&is->viddec, &is->pictq);
+            decoder_destroy(&is->viddec);
+            break;
+        case AVMEDIA_TYPE_SUBTITLE:
+            decoder_abort(&is->subdec, &is->subpq);
+            decoder_destroy(&is->subdec);
+            break;
+        default:
+            break;
+        }
+
+        ic->streams[stream_index]->discard = AVDISCARD_ALL;
+        switch(codecpar->codec_type){
+            case AVMEDIA_TYPE_AUDIO:
+                is->audio_st = NULL;
+                is->audio_stream = -1;
+                break;
+            case AVMEDIA_TYPE_VIDEO:
+                is->video_st = NULL;
+                is->video_stream = -1;
+                break;
+            case AVMEDIA_TYPE_SUBTITLE:
+                is->subtitle_st = NULL;
+                is->subtitle_stream = -1;
+                break;
+            default:
+                break;
+            }
 }
 
 static void stream_close(MainState* is) {
