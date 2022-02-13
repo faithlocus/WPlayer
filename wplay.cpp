@@ -591,6 +591,37 @@ static void stream_component_open(MainState* is, int stream_index) {
             nb_channels = avctx->channel;
             channel_layout = avctx->channel_layout;
 #endif
+
+            // prepare audio output
+            if ((ret = audio_open(is, channel_layout, nb_channels, sample_rate, &is->audio_tgt)) < 0)
+                goto fail;
+
+            is->audio_hw_buf_size = ret;
+            is->audio_src         = is->audio_tgt;
+            is->audio_buf_size    = 0;
+            is->audio_buf_index   = 0;
+
+            /* init averaging filter */
+            is->audio_diff_avg_coef  = exp(log(0.01) / AUDIO_DIFF_AVG_NB);
+            is->audio_diff_avg_count = 0;
+            /* since we do not have a precise anough audio FIFO fullness,
+            we correct audio sync only if larger than this threshold */
+            is->audio_diff_threshold = (double)(is->audio_hw_buf_size) / is->audio_tgt.bytes_per_sec;
+
+            is->audio_stream = stream_index;
+            is->audio_st     = ic->streams[stream_index];
+
+            decoder_init(&is->auddec, avctx, &is->audioq, is->continue_read_thread);
+            if ((is->ic->iformat->flags & (AVFMT_NOBINSEARCH | AVFMT_NOGENSEARCH | AVFMT_NO_BYTE_SEEK)) && 
+                !is>ic->iformat->read_seek){
+                is->auddec.start_pts = is->audio_st->start_time;
+                is->auddec.start_pts_tb = is->audio_st->time_base;
+            }
+
+            if ((ret = decoder_start(&is->auddec, audio_thread, "audio_decoder", is))  < 0)
+                goto out;
+
+            SDL_PauseAudioDevice(audio_dec, 0);
             break;
         case AVMEDIA_TYPE_VIDEO:
             is->video_stream = stream_index;
