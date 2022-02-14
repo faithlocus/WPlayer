@@ -28,6 +28,8 @@ extern "C" {
 #define SDL_AUDIO_MIN_BUFFER_SIZE 512
 #define SDL_AUDIO_MAX_CALLBACKS_PER_SEC 30
 #define SDL_VOLUME_STEP (0.75)
+#define CURSOR_HIDE_DELAY 1000000
+#define REFRESH_RATE 0.01
 
 const char* input_filename;
 int         display_disable;
@@ -63,5 +65,7 @@ int         lowres                              = 0; // brief(wangqing): lowresä
 const char* audio_codec_name;
 const char* video_codec_name;
 const char* subtitle_codec_name;
+int64_t     cursor_last_shown;
+int         cursor_hidden = 0;
 
 #endif  // __COMM_VARIABLE_H__

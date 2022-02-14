@@ -1,7 +1,8 @@
 #include "decoder.h"
+#include "packet.h"
+#include "tools/log.h"
 
-
-void decoder_init(Decoder *d,
+int decoder_init(Decoder *d,
                   AVCodecContext *avctx,
                   PacketQueue *queue,
                   SDL_cond *empty_queue_cond){
@@ -12,13 +13,13 @@ void decoder_init(Decoder *d,
     d->avctx = avctx;
     d->queue = queue;
     d->empty_queue_cond = empty_queue_cond;
-    d->start_pts        = AV_NOPTS_AVLUE;
+    d->start_pts        = AV_NOPTS_VALUE;
     d->pkt_serial       = -1;
     return 0;
 }
 
 int decoder_start(Decoder *d,
-                  int (*fc)(void *),
+                  int (*fn)(void *),
                   const char *thread_name,
                   void *arg){
     packet_queue_start(d->queue);

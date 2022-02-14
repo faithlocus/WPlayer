@@ -6,7 +6,13 @@ extern "C" {
 #endif 
 
 #include "libavcodec/avcodec.h"
+#ifdef __GNUC__
 #include "SDL/SDL.h"
+#include "SDL/SDL_thread.h"
+#else
+#include "SDL.h"
+#include "SDL_thread.h"
+#endif
 
 #ifdef __cplusplus
 }
@@ -15,7 +21,7 @@ extern "C" {
 struct PacketQueue;
 // 解码器，音频，视频，字幕独立不影响,即独立线程解码
 struct Decoder {
-    AVPacket        pkt; 
+    AVPacket*       pkt; 
     PacketQueue*    queue;          // 数据包队列
     AVCodecContext* avctx;          // 解码上下文
 
@@ -35,13 +41,13 @@ int audio_thread(void* arg);
 int video_thread(void* arg);
 int subtitle_thread(void* arg);
 
-void decoder_init(Decoder*        d,
+int decoder_init(Decoder*        d,
                   AVCodecContext* avcx,
                   PacketQueue*    queue,
                   SDL_cond*       empty_queue_cond);
 
 int decoder_start(Decoder* d,
-                  int (*fc)(void*),
+                  int (*fn)(void*),
                   const char* thread_name,
                   void*       arg);
 #endif  // __DECODER_H__
