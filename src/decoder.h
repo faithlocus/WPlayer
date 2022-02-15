@@ -41,6 +41,8 @@ int audio_thread(void* arg);
 int video_thread(void* arg);
 int subtitle_thread(void* arg);
 
+int decoder_decoder_frame(Decoder* d, AVFrame* frame, AVSubtitle* sub);
+
 int decoder_init(Decoder*        d,
                   AVCodecContext* avcx,
                   PacketQueue*    queue,
