@@ -48,13 +48,13 @@ int decoder_decoder_frame(Decoder* d, AVFrame* frame, AVSubtitle* sub) {
                         if (decoder_reorder_pts == -1)
                             frame->pts = frame->best_effort_timestamp;
                         else if (!decoder_reorder_pts)
-                            frame->pts = frame->pkt_pts;  // brief: »ù±¾²»»á·¢Éú
+                            frame->pts = frame->pkt_pts;  // brief: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á·¢ï¿½ï¿½
                     }
                     break;
                 case AVMEDIA_TYPE_AUDIO:
                     ret = avcodec_receive_frame(d->avctx, frame);
                     if (ret >= 0) {
-                        // TODO(wangqing): ÈçºÎ»ñÈ¡µÄÒôÆµpts
+                        // TODO(wangqing): ï¿½ï¿½Î»ï¿½È¡ï¿½ï¿½ï¿½ï¿½Æµpts
                         AVRational tb{ 1, frame->sample_rate };
                         if (frame->pts != AV_NOPTS_VALUE)
                             frame->pts = av_rescale_q(
@@ -144,7 +144,24 @@ int audio_thread(void* arg) {
     do {
         if ((got_frame = decoder_decoder_frame(&is->auddec, frame, NULL)) < 0)
             goto the_end;
+        if (got_frame) {
+            tb = (AVrational){1, frame->samplerate};
+
+            if (!(af = frame_queue_peek_writable(&is->sampq)))
+                goto the_endl;
+
+            af->pts =
+                (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+            af->pos = frame->pkt_pos;
+            af->serial = is->auddec.pkt_serial;
+            af->duration =
+                av_q2d(AVRational{ frame->nb_samples, frame->sample_rate });
+
+            av_frame_move_ref(af->frame, frame);
+            frame_queue_push(&is->sampq);
+        }
     } while (ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF);
+
 
 the_end:
 #if CONFIG_AVFILTER
