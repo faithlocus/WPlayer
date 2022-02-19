@@ -215,6 +215,37 @@ the_end:
     return ret;
 }
 
-int video_thread(void* arg) {}
+int video_thread(void* arg) {
+    MainState* is = arg;
+    AVFrame*   frame = av_frame_alloc();
+    double     pts, duration;
+    int        ret;
+    AVRational* tb = is->video_st->time_base;
+    AVRational* frame_rate = av_guess_frame_rate(is, is->video_st, NULL);
+
+
+    if (!frame)
+        return AVERROR(ENOMEM);
+
+    while(true){
+        ret = get_video_frame(is, frame);
+        if (ret < 0)
+            goto thd_end;
+        if (!ret)
+            continue;
+
+        duration = (frame_rate->num && frame_rate->den ? av_q2d((AVRational){frame_rate.den, frame_rate.den}): 0);
+        pts = (frame->pts == AV_NOPTS_VALUE) ? NAN : frame->pts * av_q2d(tb);
+        ret      = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
+        av_frame_unref(frame);
+
+        if (ret < 0)
+            goto the_end;
+    }
+
+the_end:
+    av_frame_free(frame);
+    return 0;
+}
 
 int subtitle_thread(void* arg) {}
