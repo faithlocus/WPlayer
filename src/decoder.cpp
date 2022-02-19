@@ -147,6 +147,43 @@ int audio_thread(void* arg) {
         if (got_frame) {
             tb = (AVrational){1, frame->samplerate};
 
+#if CONFIG_AVFILTER
+            dec_channel_layout = get_valid_layout(frame->channel_layout, frame->channels);
+            reconfigure =
+                cmd_audio_fmts(is->audio_filter_src.fmt,
+                               is->audio_filter_src.channels,
+                               frame->format,
+                               frame->channels)
+                || is->audio_filter_src.channel_layout != dec_channel_layout
+                || is->audio_filter_src.freq != frame->sample_rate
+                || is->auddec.pkt_serial != last_serial;
+
+            if (reconfigure){
+                char buf1[1024], buf2[1024];
+                av_get_channel_layout_string(buf1, sizeof(buf1), -1, is->audio_filter_src.channel_layout);
+                av_get_channel_layout_string(buf2, sizeof(buf2), -1, dec_channel_layout);
+                av_log(NULL, AV_LOG_DEBUG,
+                        "Audio frame changed from rate:%d ch:%d fmt:%s layout:%s serial:%d to rate:%d ch:%d fmt:%s layout:%s serial:%d\n",
+                        is->audio_filter_src.freq, is->audio_filter_src.channels, av_get_sample_fmt_name(is->audio_filter_src.fmt), buf1, last_serial,
+                        frame->sample_rate, frame->channels, av_get_sample_fmt_name(frame->format), buf2, is->auddec.pkt_serial);
+
+                is->audio_filter_src.fmt            = frame->format;
+                is->audio_filter_src.channels       = frame->channels;
+                is->audio_filter_src.channel_layout = dec_channel_layout;
+                is->audio_filter_src.freq           = frame->sample_rate;
+                last_serial                         = is->auddec.pkt_serial;
+
+                if ((ret = configure_audio_filters(is, afilters, 1)) < 0)
+                    goto the_endl;
+            }
+
+            if ((ret = av_buffersrc_add_frame(is->in_audio_filter, frame)) < 0)
+                goto the_end;
+
+            while ((ret = av_buffersink_get_frame_flags(is->out_audio_filter, frame, 0)) >= 0) {
+                tb = av_buffersink_get_time_base(is->out_audio_filter);
+
+#endif
             if (!(af = frame_queue_peek_writable(&is->sampq)))
                 goto the_endl;
 
@@ -159,6 +196,13 @@ int audio_thread(void* arg) {
 
             av_frame_move_ref(af->frame, frame);
             frame_queue_push(&is->sampq);
+#if CONFIG_AVFILTER
+            if (is->audioq.serial != is->auddec.pkt_serial)
+                    break;
+            }
+            if (ret == AVERROR_EOF)
+                is->auddec.finished = is->auddec.pkt_serial;
+#endif
         }
     } while (ret >= 0 || ret == AVERROR(EAGAIN) || ret == AVERROR_EOF);
 

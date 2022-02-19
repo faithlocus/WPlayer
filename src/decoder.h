@@ -18,6 +18,8 @@ extern "C" {
 }
 #endif //__cplusplus
 
+#include "my_struct.h"
+
 struct PacketQueue;
 // 解码器，音频，视频，字幕独立不影响,即独立线程解码
 struct Decoder {

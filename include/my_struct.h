@@ -31,6 +31,8 @@ extern "C" {
 }
 #endif  //__cplusplus
 
+#define CONFIG_AVFILTER 1
+
 // 音频参数，重采样前 + 重采样后
 struct AudioParams {
     int            freq;            // 采样率
