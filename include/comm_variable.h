@@ -67,6 +67,7 @@ const char* video_codec_name;
 const char* subtitle_codec_name;
 int64_t     cursor_last_shown;
 int         cursor_hidden = 0;
-int decoder_reorder_pts = -1;
+int         decoder_reorder_pts = -1;
+int         filter_nbthreads    = 0;
 
 #endif  // __COMM_VARIABLE_H__
