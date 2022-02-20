@@ -373,5 +373,33 @@ int subtitle_thread(void *arg) {
 }
 
 static int get_video_frame(MainState *is, AVFrame *frame){
+    int got_picture;
 
+    if ((got_picture = decoder_decoder_frame(&is->viddec, frame, NULL)) < 0)
+        return -1;
+    if (got_picture){
+        double dpts = NAN;
+        if (frame->pts != AV_NOPTS_VALUE)
+            dpts = avv_q2d(is->video_st->time_base) * frame->pts;
+
+        frame->sample_aspect_ratio =
+            av_guess_sample_aspect_ratio(is->ic, is->video_st, frame);
+        
+        // TODO(wangqing): framedrop why
+        if (framedrop > 0 || (framedrop && get_master_sync_type(is) != AV_SYNC_VIDEO_MASTER)){
+            if(frame->pts != AV_NOPTS_VALUE){
+                double diff = dpts - get_master_clock(is);
+                if (!isnan(diff) &&  
+                    fabs(diff) < AV_NOSYNC_THRESHOLD && 
+                    diff - is->frame_last_fitler_delay < 0 && 
+                    is->viddec.pkt_serial == is->vidclk.serial && 
+                    is->videoq.nb_packets){
+                    is->frame_drop_early++;
+                    av_frame_unref(frame);
+                    got_picture = 0;
+                }
+            }
+        }
+    }
+    return got_picture;
 }
